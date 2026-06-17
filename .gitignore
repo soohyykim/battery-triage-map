@@ -1,0 +1,11 @@
+﻿.env
+data/battery.db
+data/chroma_db/
+outputs/
+!outputs/.gitkeep
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+Thumbs.db
