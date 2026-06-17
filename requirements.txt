@@ -1,12 +1,1 @@
-﻿streamlit==1.35.0
-fastapi==0.111.0
-uvicorn==0.30.0
-chromadb==0.5.0
-langchain==0.2.0
-langchain-anthropic==0.1.15
-folium==0.16.0
-streamlit-folium==0.20.0
-fpdf2==2.7.9
-pandas==2.2.2
-requests==2.31.0
-python-dotenv==1.0.1
+
