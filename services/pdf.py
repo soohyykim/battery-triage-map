@@ -1,6 +1,7 @@
 ﻿"""
-services/pdf.py - PDF ?먮룞 諛쒓툒 2醫?(W3 ?꾩꽦 ?덉젙)
-1) 諛고꽣由??먯젙 寃곌낵??/ 2) 泥섎━ 留ㅼ묶 ?뺤씤???쇱씠釉뚮윭由? fpdf2 | ?쒓? ?고듃: assets/NanumGothic.ttf
+services/pdf.py - PDF 자동 발급 2종 (W3 완성 예정)
+1) 배터리 판정 결과서 / 2) 처리 매칭 확인서
+라이브러리: fpdf2 | 한글 폰트: assets/NanumGothic.ttf
 """
 from __future__ import annotations
 import os
@@ -9,7 +10,7 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = Path(os.getenv("OUTPUT_DIR", str(BASE_DIR / "outputs")))
 FONT_PATH = BASE_DIR / "assets" / "NanumGothic.ttf"
-DISCLAIMER = "蹂?臾몄꽌???됱젙 李멸퀬?⑹씠硫??щ컮濡??쒖뒪???꾩옄?멸퀎?쒕? ?泥댄븯吏 ?딆뒿?덈떎."
+DISCLAIMER = "본 문서는 행정 참고용이며 올바로 시스템 전자인계서를 대체하지 않습니다."
 
 def _new_pdf():
     from fpdf import FPDF
@@ -23,7 +24,7 @@ def _new_pdf():
     return pdf
 
 def build_triage_report(data: dict) -> str:
-    raise NotImplementedError("諛고꽣由??먯젙 寃곌낵??PDF??W3?먯꽌 援ы쁽")
+    raise NotImplementedError("배터리 판정 결과서 PDF는 W3에서 구현")
 
 def build_match_confirm(data: dict) -> str:
-    raise NotImplementedError("泥섎━ 留ㅼ묶 ?뺤씤??PDF??W3?먯꽌 援ы쁽")
+    raise NotImplementedError("처리 매칭 확인서 PDF는 W3에서 구현")

@@ -1,12 +1,12 @@
-﻿# ?뺤콉 RAG ?섏쭛 臾몄꽌 (data/policies/)
+﻿# 정책 RAG 수집 문서 (data/policies/)
 
-services/rag.py 媛 ???대뜑??*.pdf 瑜?ChromaDB???꾨쿋?⑺빀?덈떎.
+services/rag.py 가 이 폴더의 *.pdf 를 ChromaDB에 임베딩합니다.
 
-| ?뚯씪紐?沅뚯옣) | 臾몄꽌 | 異쒖쿂 |
+| 파일명(권장) | 문서 | 출처 |
 |---|---|---|
-| used_battery_act.pdf | ?ъ슜?꾨같?곕━踰?| https://www.law.go.kr |
-| waste_management_act.pdf | ?먭린臾쇨?由щ쾿 | https://www.law.go.kr |
-| me_transport_guideline.pdf | ?섍꼍遺 諛고꽣由??댁넚쨌蹂닿? 媛?대뱶?쇱씤 | https://www.me.go.kr |
-| motie_infra_plan_20240710.pdf | ?곗뾽遺 ?ъ슜??諛고꽣由?踰빧룹젣?꽷룹씤?꾨씪 援ъ텞諛⑹븞 | https://www.motie.go.kr |
+| used_battery_act.pdf | 사용후배터리법 | https://www.law.go.kr |
+| waste_management_act.pdf | 폐기물관리법 | https://www.law.go.kr |
+| me_transport_guideline.pdf | 환경부 배터리 운송·보관 가이드라인 | https://www.me.go.kr |
+| motie_infra_plan_20240710.pdf | 산업부 사용후 배터리 법·제도·인프라 구축방안 | https://www.motie.go.kr |
 
-?곸옱: python -m services.rag
+적재: python -m services.rag

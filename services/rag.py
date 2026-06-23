@@ -1,7 +1,7 @@
 ﻿"""
-services/rag.py - ?뺤콉 RAG ?뚯씠?꾨씪??(諛깆뿏??AI ?대떦)
-W1: ChromaDB 珥덇린 ?ㅼ젙 + PyMuPDF ?띿뒪??異붿텧 怨④꺽
-W2: ?꾨쿋???곸옱(build_index) + RetrievalQA(generate_report) ?꾩꽦
+services/rag.py - 정책 RAG 파이프라인 (백엔드/AI 담당)
+W1: ChromaDB 초기 설정 + PyMuPDF 텍스트 추출 골격
+W2: 임베딩 적재(build_index) + RetrievalQA(generate_report) 완성
 """
 from __future__ import annotations
 import os
@@ -30,9 +30,9 @@ def load_policy_texts() -> List[dict]:
     docs = []
     for pdf in sorted(POLICY_DIR.glob("*.pdf")):
         docs.append({"source": pdf.name, "text": extract_text(pdf)})
-        print(f"[rag] 異붿텧 ?꾨즺: {pdf.name}")
+        print(f"[rag] 추출 완료: {pdf.name}")
     if not docs:
-        print(f"[rag] {POLICY_DIR} ??PDF ?놁쓬. data/policies/README.md 李멸퀬.")
+        print(f"[rag] {POLICY_DIR} 에 PDF 없음. data/policies/README.md 참고.")
     return docs
 
 def get_chroma_client():
@@ -52,14 +52,14 @@ def build_index() -> int:
         chunks = splitter.split_text(doc["text"])
         # TODO(W2): collection.add(ids=..., documents=chunks, metadatas=...)
         total += len(chunks)
-        print(f"[rag] {doc['source']} -> {len(chunks)} chunks (?곸옱 蹂대쪟: W2)")
+        print(f"[rag] {doc['source']} -> {len(chunks)} chunks (적재 보류: W2)")
     return total
 
 def generate_report(payload: dict) -> dict:
-    # TODO(W2): RetrievalQA 泥댁씤 援ъ꽦 ??援ы쁽
-    raise NotImplementedError("RAG 由ы룷???앹꽦? W2?먯꽌 援ы쁽")
+    # TODO(W2): RetrievalQA 체인 구성 후 구현
+    raise NotImplementedError("RAG 리포트 생성은 W2에서 구현")
 
 if __name__ == "__main__":
     col = get_collection()
-    print(f"[rag] ChromaDB 以鍮??꾨즺: {col.name} (count={col.count()})")
+    print(f"[rag] ChromaDB 준비 완료: {col.name} (count={col.count()})")
     build_index()

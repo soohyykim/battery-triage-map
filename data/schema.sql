@@ -1,5 +1,5 @@
-﻿-- Battery Triage Map - SQLite ?ㅽ궎留?(?뚯씠釉?3醫?
--- ?곸슜: python data/init_db.py
+﻿-- Battery Triage Map - SQLite 스키마 (테이블 3종)
+-- 적용: python data/init_db.py
 
 CREATE TABLE IF NOT EXISTS triage_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -27,7 +27,7 @@ CREATE INDEX IF NOT EXISTS idx_company_region ON companies(region);
 CREATE TABLE IF NOT EXISTS match_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     triage_id INTEGER, company_id INTEGER, rank INTEGER,
-    distance_km REAL, score REAL, status TEXT DEFAULT '?쒖븞',
+    distance_km REAL, score REAL, status TEXT DEFAULT '제안',
     handling_method TEXT, quantity INTEGER,
     vehicle_no TEXT, scheduled_date TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

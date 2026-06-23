@@ -1,10 +1,10 @@
 ﻿# Battery Triage Map
 
-?꾧린李??ъ슜??諛고꽣由ъ쓽 ?꾪뿕?꽷룻솕?숆퀎瑜?AI濡?利됱떆 ?먯젙?섍퀬 吏??泥섎━湲곗뾽???곌껐?섎뒗 ?섏궗寃곗젙 吏???뚮옯??
+전기차 사용후 배터리의 위험도·화학계를 AI로 즉시 판정하고 지역 처리기업을 연결하는 의사결정 지원 플랫폼.
 
-> ??4???곗뾽?듭긽?먯썝遺 怨듦났?곗씠???쒖슜 ?꾩씠?붿뼱 怨듬え??(留덇컧 2026.07.06)
+> 제14회 산업통상자원부 공공데이터 활용 아이디어 공모전 (마감 2026.07.06)
 
-## ?ㅽ뻾
+## 실행
 ```bash
 pip install -r requirements.txt
 cp .env.example .env
@@ -13,18 +13,21 @@ uvicorn api.main:app --reload   # -> http://127.0.0.1:8000/docs
 streamlit run app.py
 ```
 
-## API ?붾뱶?ъ씤??| Method | Path | ?ㅻ챸 | ?대떦 |
+## API 엔드포인트
+| Method | Path | 설명 | 담당 |
 |---|---|---|---|
-| GET | / | ?ъ뒪泥댄겕 | - |
-| POST | /triage | Rule Engine (?꾪뿕?? | services/rule.py [??? |
-| POST | /score | ?깃툒쨌?뷀븰怨??먯젙 | services/triage.py [?곗뿏] |
-| POST | /match | 泥섎━湲곗뾽 留ㅼ묶 | services/matching.py [?곗뿏] |
-| POST | /report | ?뺤콉 RAG 由ы룷??| services/rag.py [諛깆뿏??AI] |
+| GET | / | 헬스체크 | - |
+| POST | /triage | Rule Engine (위험도) | services/rule.py [팀장] |
+| POST | /score | 등급·화학계 판정 | services/triage.py [데엔] |
+| POST | /match | 처리기업 매칭 | services/matching.py [데엔] |
+| POST | /report | 정책 RAG 리포트 | services/rag.py [백엔드/AI] |
 
-## SQLite ?ㅽ궎留?- triage_history: 諛고꽣由??먯젙 ?대젰
-- companies: 泥섎━?낆껜 DB
-- match_history: 留ㅼ묶 ?대젰
+## SQLite 스키마
+- triage_history: 배터리 판정 이력
+- companies: 처리업체 DB
+- match_history: 매칭 이력
 
-## ?쇱젙
-- W1 (6/17~6/23): FastAPI 怨④꺽 쨌 SQLite 쨌 ChromaDB 珥덇린????- W2 (6/24~6/27): ?꾨쿋???꾩꽦 쨌 /triage /score 援ы쁽
-- W3 (6/28~7/4): /match /report 쨌 PDF 2醫?쨌 SC 諛고룷
+## 일정
+- W1 (6/17~6/23): FastAPI 골격 · SQLite · ChromaDB 초기화 ✅
+- W2 (6/24~6/27): 임베딩 완성 · /triage /score 구현
+- W3 (6/28~7/4): /match /report · PDF 2종 · SC 배포

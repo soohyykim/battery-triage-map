@@ -3,22 +3,22 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 class BatteryInput(BaseModel):
-    battery_id: str = Field(..., description="諛고꽣由??앸퀎??)
-    chemistry: Optional[str] = Field(None, description="?뷀븰怨?(NCM/LFP/NCA ??")
+    battery_id: str = Field(..., description="배터리 식별자")
+    chemistry: Optional[str] = Field(None, description="화학계 (NCM/LFP/NCA 등)")
     soh: Optional[float] = Field(None, ge=0, le=100, description="State of Health (%)")
-    voltage: Optional[float] = Field(None, description="?꾩븬 (V)")
-    temperature: Optional[float] = Field(None, description="?쒕㈃ ?⑤룄 (??")
-    swelling: Optional[bool] = Field(None, description="?멸? 遺????щ?")
-    leakage: Optional[bool] = Field(None, description="?꾪빐???꾩텧 ?щ?")
-    cycle_count: Optional[int] = Field(None, ge=0, description="異⑸갑???ъ씠????)
-    region: Optional[str] = Field(None, description="諛곗텧 吏??(??援?援?")
-    lat: Optional[float] = Field(None, description="諛곗텧 ?꾩튂 ?꾨룄")
-    lon: Optional[float] = Field(None, description="諛곗텧 ?꾩튂 寃쎈룄")
+    voltage: Optional[float] = Field(None, description="전압 (V)")
+    temperature: Optional[float] = Field(None, description="표면 온도 (℃)")
+    swelling: Optional[bool] = Field(None, description="외관 부풀음 여부")
+    leakage: Optional[bool] = Field(None, description="전해액 누출 여부")
+    cycle_count: Optional[int] = Field(None, ge=0, description="충방전 사이클 수")
+    region: Optional[str] = Field(None, description="배출 지역 (시/군/구)")
+    lat: Optional[float] = Field(None, description="배출 위치 위도")
+    lon: Optional[float] = Field(None, description="배출 위치 경도")
 
 class TriageRequest(BatteryInput): pass
 class TriageResponse(BaseModel):
     battery_id: str
-    risk_level: str = Field(..., description="?꾪뿕??(?뺤긽/二쇱쓽/?꾪뿕/湲닿툒)")
+    risk_level: str = Field(..., description="위험도 (정상/주의/위험/긴급)")
     triggered_rules: List[str] = Field(default_factory=list)
     detail: dict = Field(default_factory=dict)
 
