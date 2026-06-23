@@ -1,8 +1,11 @@
 ﻿.env
 data/battery.db
+data/chroma/
 data/chroma_db/
+data/policies/*.pdf
 outputs/
 !outputs/.gitkeep
+assets/*.ttf
 __pycache__/
 *.pyc
 .venv/
