@@ -1,0 +1,19 @@
+﻿company_id,company_name,address,region,latitude,longitude,license_type,process_type,accepted_chemistry,accepted_grade,monthly_capacity_count,diagnostic_capability,is_active
+C001,인천배터리리사이클,인천광역시 서구,인천,37.545,126.676,recycling,recycle,"NCM,LFP","Orange,Gray",80,basic,True
+C002,경기배터리진단센터,경기도 안산시 단원구,경기,37.321,126.83,reuse_diagnosis,reuse,"NCM,LFP","Green,Yellow,Gray",45,kolas,True
+C003,화성순환배터리,경기도 화성시,경기,37.199,126.831,recycling,recycle,NCM,Orange,120,basic,True
+C004,시흥EV재사용센터,경기도 시흥시,경기,37.38,126.803,reuse_diagnosis,reuse,"NCM,LFP","Green,Yellow",35,kolas,True
+C005,충청자원순환,충청남도 천안시,충남,36.815,127.113,recycling,recycle,NCM,"Orange,Gray",150,basic,True
+C006,아산LFP순환센터,충청남도 아산시,충남,36.789,127.001,recycling,recycle,LFP,"Orange,Gray",90,basic,True
+C007,대전배터리성능평가,대전광역시 유성구,대전,36.362,127.356,reuse_diagnosis,reuse,"NCM,LFP","Green,Yellow,Gray",50,kolas,True
+C008,청주EV리사이클,충청북도 청주시,충북,36.642,127.489,recycling,recycle,"NCM,LFP",Orange,110,basic,True
+C009,광주미래배터리,광주광역시 광산구,광주,35.139,126.793,reuse_diagnosis,reuse,"NCM,LFP","Green,Yellow",40,kolas,True
+C010,전북자원회수센터,전라북도 전주시,전북,35.824,127.148,recycling,recycle,NCM,"Orange,Gray",130,basic,True
+C011,대구배터리순환,대구광역시 달서구,대구,35.829,128.532,recycling,recycle,"NCM,LFP",Orange,100,basic,True
+C012,구미배터리진단랩,경상북도 구미시,경북,36.119,128.344,reuse_diagnosis,reuse,"NCM,LFP","Green,Yellow,Gray",55,kolas,True
+C013,울산전지재활용,울산광역시 남구,울산,35.538,129.311,recycling,recycle,NCM,"Orange,Gray",160,basic,True
+C014,부산LFP회수센터,부산광역시 강서구,부산,35.212,128.98,recycling,recycle,LFP,"Orange,Gray",95,basic,True
+C015,창원배터리자원화,경상남도 창원시,경남,35.228,128.681,recycling,recycle,"NCM,LFP",Orange,140,basic,True
+C016,강원EV진단센터,강원특별자치도 원주시,강원,37.342,127.92,reuse_diagnosis,reuse,"NCM,LFP","Green,Yellow",30,kolas,True
+C017,제주배터리순환센터,제주특별자치도 제주시,제주,33.499,126.531,recycling,recycle,"NCM,LFP","Orange,Gray",45,basic,True
+C018,수도권지정폐배터리처리,경기도 평택시,경기,36.992,127.112,designated_waste,designated_waste,"NCM,LFP,UNKNOWN","Red,Gray",70,none,True
