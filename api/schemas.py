@@ -28,6 +28,7 @@ class BatteryInput(BaseModel):
     current_year: Optional[int] = Field(None, description="기준 연도 (테스트용)")
 
     model_config = {
+        "protected_namespaces": (),  # model_name 이 예약어(model_)와 겹쳐 뜨는 경고 제거
         "json_schema_extra": {
             "example": {
                 "vehicle_year": 2018, "mileage_km": 160000, "capacity_kwh": 64.0,
@@ -54,6 +55,9 @@ class TriageResponse(BaseModel):
     collection_route: str
     data_confidence: float = Field(..., description="입력 완성도 0~1")
     reason_codes: List[str] = Field(default_factory=list)
+    triage_id: Optional[int] = Field(
+        None, description="DB에 저장된 판정 이력 id (/match·관리페이지에서 사용)"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +81,9 @@ class MatchRequest(BaseModel):
     origin_latitude: float = Field(..., description="배터리 발생 위치 위도")
     origin_longitude: float = Field(..., description="배터리 발생 위치 경도")
     max_results: int = Field(3, ge=1, le=10, description="추천 업체 수")
+    triage_id: Optional[int] = Field(
+        None, description="연결할 판정 이력 id (/triage 응답의 triage_id). 주면 매칭 이력 저장"
+    )
 
 
 class MatchedCompany(BaseModel):
@@ -116,3 +123,43 @@ class ReportRequest(BaseModel):
 class ReportResponse(BaseModel):
     report: str = Field(..., description="정책 RAG 기반 처리 가이드 리포트")
     sources: List[str] = Field(default_factory=list, description="참조 정책 문서 출처")
+
+
+# ---------------------------------------------------------------------------
+# GET /history  -> 배터리 관리 페이지 (판정 이력)
+# ---------------------------------------------------------------------------
+class HistoryItem(BaseModel):
+    """판정 이력 목록 1행. DB triage_history 컬럼과 대응 (extra 허용으로 유연)."""
+    id: int
+    created_at: Optional[str] = None
+    manufacturer: Optional[str] = None
+    model_name: Optional[str] = None
+    vehicle_year: Optional[int] = None
+    mileage_km: Optional[float] = None
+    capacity_kwh: Optional[float] = None
+    chemistry: Optional[str] = None
+    battery_count: Optional[int] = None
+    soh_proxy_score: Optional[float] = None
+    reuse_score: Optional[float] = None
+    recycle_score: Optional[float] = None
+    data_confidence: Optional[float] = None
+    grade: Optional[str] = None
+    recommended_path: Optional[str] = None
+    required_diagnostic_capability: Optional[str] = None
+    collection_route: Optional[str] = None
+    reason_codes: Optional[str] = None
+    origin_latitude: Optional[float] = None
+    origin_longitude: Optional[float] = None
+    approved_by: Optional[str] = None
+    approved_at: Optional[str] = None
+
+    model_config = {"extra": "allow", "protected_namespaces": ()}
+
+
+class HistoryDetail(HistoryItem):
+    """판정 1건 + 연결된 매칭 결과."""
+    matched_companies: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class ApproveRequest(BaseModel):
+    approved_by: str = Field(..., description="승인 담당자 이름/ID")
