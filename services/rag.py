@@ -166,7 +166,17 @@ def search_policies(query: str, n_results: int = 4) -> List[dict]:
     """질의와 관련된 조문 상위 n개를 반환. [{source, article, content}, ...]"""
     collection = get_collection()
     if collection.count() == 0:
-        return []
+        # 배포 환경 안전망: 인덱스가 비어있으면 1회 자동 구축한다.
+        # (정책 PDF가 repo에 포함돼 있어야 가능. 실패해도 빈 결과로 안전하게 처리.)
+        try:
+            print("[rag] 인덱스 비어있음 -> 자동 구축 시도")
+            build_index(reset=False)
+            collection = get_collection()
+        except Exception as e:
+            print(f"[rag] 자동 인덱싱 실패(빈 결과 반환): {e}")
+            return []
+        if collection.count() == 0:
+            return []
     res = collection.query(query_texts=[query], n_results=n_results)
     out: List[dict] = []
     docs = res.get("documents", [[]])[0]
