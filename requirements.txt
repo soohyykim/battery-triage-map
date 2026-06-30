@@ -12,6 +12,8 @@ openai==1.51.0
 requests==2.32.3
 python-dotenv==1.0.1
 pandas==2.2.3
+sqlalchemy==2.0.35
+psycopg2-binary==2.9.9
 streamlit==1.39.0
 folium==0.17.0
 streamlit-folium==0.23.1

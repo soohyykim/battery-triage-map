@@ -1,48 +1,138 @@
 """
 services/db.py
-SQLite 영속 계층 (백엔드/AI 담당).
+DB 영속 계층 (백엔드/AI 담당) — SQLAlchemy 기반, SQLite/PostgreSQL 양쪽 호환.
+
+엔진 선택:
+  - 환경변수 DATABASE_URL 이 있으면 그걸로 접속 (배포: Render PostgreSQL)
+  - 없으면 로컬 SQLite(data/battery.db) 사용 (로컬 개발/테스트)
+  => 코드 변경 없이 DATABASE_URL 만으로 DB 가 바뀐다.
 
 역할:
   - /triage 결과를 triage_history 에 저장 (save_triage)
   - /match 결과를 match_history 에 저장 (save_match)
   - 배터리 관리 페이지용 이력 조회 (list_history / get_history)
   - 담당자 승인 기록 (approve_triage)
-
-DB 파일은 data/battery.db (git 제외). 스키마가 없으면 schema.sql 로 자동 생성한다.
 """
 from __future__ import annotations
 
 import os
-import sqlite3
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+from sqlalchemy import (
+    Column, DateTime, Float, Integer, MetaData, String, Table,
+    create_engine, func, insert, select, update,
+)
+from sqlalchemy.engine import Engine, Row
+
 BASE_DIR = Path(__file__).resolve().parent.parent
-DB_PATH = Path(os.getenv("DB_PATH", str(BASE_DIR / "data" / "battery.db")))
-SCHEMA_PATH = BASE_DIR / "data" / "schema.sql"
+DEFAULT_SQLITE = f"sqlite:///{BASE_DIR / 'data' / 'battery.db'}"
+
+
+def _resolve_db_url() -> str:
+    """DATABASE_URL(배포) 우선, 없으면 로컬 SQLite. postgres:// 는 postgresql:// 로 정규화."""
+    url = os.getenv("DATABASE_URL", "").strip()
+    if not url:
+        return DEFAULT_SQLITE
+    # Render/Heroku 가 주는 구형 postgres:// 스킴을 SQLAlchemy 표준으로 교정
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return url
 
 
 # ---------------------------------------------------------------------------
-# 연결 / 스키마 보장
+# 테이블 정의 (DDL은 SQLAlchemy가 DB 종류에 맞게 생성 — SQLite/Postgres 모두 OK)
 # ---------------------------------------------------------------------------
-def get_conn() -> sqlite3.Connection:
-    """row_factory 가 적용된 커넥션 반환. 스키마가 없으면 만든다."""
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    _ensure_schema(conn)
-    return conn
+metadata = MetaData()
+
+triage_history = Table(
+    "triage_history", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("manufacturer", String),
+    Column("model_name", String),
+    Column("vehicle_year", Integer),
+    Column("mileage_km", Float),
+    Column("capacity_kwh", Float),
+    Column("chemistry", String),
+    Column("battery_count", Integer, default=1),
+    Column("soh_proxy_score", Float),
+    Column("reuse_score", Float),
+    Column("recycle_score", Float),
+    Column("data_confidence", Float),
+    Column("grade", String),
+    Column("recommended_path", String),
+    Column("required_diagnostic_capability", String),
+    Column("collection_route", String),
+    Column("reason_codes", String),
+    Column("origin_latitude", Float),
+    Column("origin_longitude", Float),
+    Column("approved_by", String),
+    Column("approved_at", DateTime),
+    Column("created_at", DateTime, server_default=func.now()),
+)
+
+companies = Table(
+    "companies", metadata,
+    Column("company_id", String, primary_key=True),
+    Column("company_name", String, nullable=False),
+    Column("address", String),
+    Column("region", String),
+    Column("latitude", Float),
+    Column("longitude", Float),
+    Column("license_type", String),
+    Column("process_type", String),
+    Column("accepted_chemistry", String),
+    Column("accepted_grade", String),
+    Column("monthly_capacity_count", Integer),
+    Column("diagnostic_capability", String),
+    Column("is_active", Integer, default=1),
+)
+
+match_history = Table(
+    "match_history", metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("triage_id", Integer),
+    Column("rank", Integer),
+    Column("company_id", String),
+    Column("company_name", String),
+    Column("distance_km", Float),
+    Column("total_score", Float),
+    Column("process_type", String),
+    Column("diagnostic_capability", String),
+    Column("status", String, default="제안"),
+    Column("created_at", DateTime, server_default=func.now()),
+)
 
 
-def _ensure_schema(conn: sqlite3.Connection) -> None:
-    """triage_history 테이블이 없으면 schema.sql 전체를 실행한다."""
-    exists = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='triage_history'"
-    ).fetchone()
-    if not exists and SCHEMA_PATH.exists():
-        conn.executescript(SCHEMA_PATH.read_text(encoding="utf-8"))
-        conn.commit()
+# ---------------------------------------------------------------------------
+# 엔진 (1회 생성 후 캐시) + 스키마 보장
+# ---------------------------------------------------------------------------
+_engine: Optional[Engine] = None
+
+
+def get_engine() -> Engine:
+    """엔진을 한 번만 만들어 캐시하고, 테이블이 없으면 생성한다."""
+    global _engine
+    if _engine is None:
+        url = _resolve_db_url()
+        connect_args = {}
+        if url.startswith("sqlite"):
+            # FastAPI 멀티스레드에서 SQLite 공유 허용
+            connect_args = {"check_same_thread": False}
+            Path(BASE_DIR / "data").mkdir(parents=True, exist_ok=True)
+        _engine = create_engine(url, pool_pre_ping=True, connect_args=connect_args)
+        metadata.create_all(_engine)  # 없으면 생성 (있으면 그대로)
+    return _engine
+
+
+def _row_to_dict(row: Row) -> dict[str, Any]:
+    """Row -> dict. datetime 은 ISO 문자열로 변환(응답 스키마가 str 이라서)."""
+    d = dict(row._mapping)
+    for k, v in d.items():
+        if isinstance(v, datetime):
+            d[k] = v.isoformat(timespec="seconds")
+    return d
 
 
 # ---------------------------------------------------------------------------
@@ -55,68 +145,51 @@ def save_triage(
 ) -> int:
     """evaluate_battery() 결과 1건을 triage_history 에 저장하고 id 를 반환한다."""
     s = result.get("input_summary", {})
-    reason_codes = ",".join(result.get("reason_codes", []) or [])
-
-    conn = get_conn()
-    try:
-        cur = conn.execute(
-            """
-            INSERT INTO triage_history (
-                manufacturer, model_name, vehicle_year, mileage_km, capacity_kwh,
-                chemistry, battery_count,
-                soh_proxy_score, reuse_score, recycle_score, data_confidence,
-                grade, recommended_path, required_diagnostic_capability,
-                collection_route, reason_codes,
-                origin_latitude, origin_longitude
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-            """,
-            (
-                s.get("manufacturer"), s.get("model_name"), s.get("vehicle_year"),
-                s.get("mileage_km"), s.get("capacity_kwh"), s.get("chemistry"),
-                s.get("battery_count", 1),
-                result.get("soh_proxy_score"), result.get("reuse_score"),
-                result.get("recycle_score"), result.get("data_confidence"),
-                result.get("grade"), result.get("recommended_path"),
-                result.get("required_diagnostic_capability"),
-                result.get("collection_route"), reason_codes,
-                origin_latitude, origin_longitude,
-            ),
-        )
-        conn.commit()
-        return int(cur.lastrowid)
-    finally:
-        conn.close()
+    values = {
+        "manufacturer": s.get("manufacturer"),
+        "model_name": s.get("model_name"),
+        "vehicle_year": s.get("vehicle_year"),
+        "mileage_km": s.get("mileage_km"),
+        "capacity_kwh": s.get("capacity_kwh"),
+        "chemistry": s.get("chemistry"),
+        "battery_count": s.get("battery_count", 1),
+        "soh_proxy_score": result.get("soh_proxy_score"),
+        "reuse_score": result.get("reuse_score"),
+        "recycle_score": result.get("recycle_score"),
+        "data_confidence": result.get("data_confidence"),
+        "grade": result.get("grade"),
+        "recommended_path": result.get("recommended_path"),
+        "required_diagnostic_capability": result.get("required_diagnostic_capability"),
+        "collection_route": result.get("collection_route"),
+        "reason_codes": ",".join(result.get("reason_codes", []) or []),
+        "origin_latitude": origin_latitude,
+        "origin_longitude": origin_longitude,
+    }
+    with get_engine().begin() as conn:
+        res = conn.execute(insert(triage_history).values(**values))
+        return int(res.inserted_primary_key[0])
 
 
 def save_match(triage_id: int, match_result: dict[str, Any]) -> int:
     """match_companies() 결과(matched_companies)를 match_history 에 저장. 저장 행 수 반환."""
-    companies = match_result.get("matched_companies", []) or []
-    if not companies:
+    rows = [
+        {
+            "triage_id": triage_id,
+            "rank": c.get("rank"),
+            "company_id": c.get("company_id"),
+            "company_name": c.get("company_name"),
+            "distance_km": c.get("distance_km"),
+            "total_score": c.get("total_score"),
+            "process_type": c.get("process_type"),
+            "diagnostic_capability": c.get("diagnostic_capability"),
+        }
+        for c in (match_result.get("matched_companies", []) or [])
+    ]
+    if not rows:
         return 0
-
-    conn = get_conn()
-    try:
-        rows = [
-            (
-                triage_id, c.get("rank"), c.get("company_id"), c.get("company_name"),
-                c.get("distance_km"), c.get("total_score"),
-                c.get("process_type"), c.get("diagnostic_capability"),
-            )
-            for c in companies
-        ]
-        conn.executemany(
-            """
-            INSERT INTO match_history (
-                triage_id, rank, company_id, company_name,
-                distance_km, total_score, process_type, diagnostic_capability
-            ) VALUES (?,?,?,?,?,?,?,?)
-            """,
-            rows,
-        )
-        conn.commit()
-        return len(rows)
-    finally:
-        conn.close()
+    with get_engine().begin() as conn:
+        conn.execute(insert(match_history), rows)
+    return len(rows)
 
 
 # ---------------------------------------------------------------------------
@@ -124,45 +197,39 @@ def save_match(triage_id: int, match_result: dict[str, Any]) -> int:
 # ---------------------------------------------------------------------------
 def list_history(limit: int = 100) -> list[dict[str, Any]]:
     """최근 판정 이력 목록을 최신순으로 반환한다."""
-    conn = get_conn()
-    try:
-        rows = conn.execute(
-            "SELECT * FROM triage_history ORDER BY created_at DESC, id DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        conn.close()
+    stmt = (
+        select(triage_history)
+        .order_by(triage_history.c.created_at.desc(), triage_history.c.id.desc())
+        .limit(limit)
+    )
+    with get_engine().connect() as conn:
+        return [_row_to_dict(r) for r in conn.execute(stmt)]
 
 
 def get_history(triage_id: int) -> Optional[dict[str, Any]]:
     """판정 1건 + 매칭 결과를 함께 반환한다. 없으면 None."""
-    conn = get_conn()
-    try:
+    with get_engine().connect() as conn:
         row = conn.execute(
-            "SELECT * FROM triage_history WHERE id=?", (triage_id,)
-        ).fetchone()
+            select(triage_history).where(triage_history.c.id == triage_id)
+        ).first()
         if row is None:
             return None
         matches = conn.execute(
-            "SELECT * FROM match_history WHERE triage_id=? ORDER BY rank", (triage_id,)
-        ).fetchall()
-        result = dict(row)
-        result["matched_companies"] = [dict(m) for m in matches]
+            select(match_history)
+            .where(match_history.c.triage_id == triage_id)
+            .order_by(match_history.c.rank)
+        )
+        result = _row_to_dict(row)
+        result["matched_companies"] = [_row_to_dict(m) for m in matches]
         return result
-    finally:
-        conn.close()
 
 
 def approve_triage(triage_id: int, approver: str) -> bool:
     """담당자 승인 기록. 대상이 있으면 True."""
-    conn = get_conn()
-    try:
-        cur = conn.execute(
-            "UPDATE triage_history SET approved_by=?, approved_at=? WHERE id=?",
-            (approver, datetime.now().isoformat(timespec="seconds"), triage_id),
-        )
-        conn.commit()
-        return cur.rowcount > 0
-    finally:
-        conn.close()
+    stmt = (
+        update(triage_history)
+        .where(triage_history.c.id == triage_id)
+        .values(approved_by=approver, approved_at=datetime.now())
+    )
+    with get_engine().begin() as conn:
+        return conn.execute(stmt).rowcount > 0

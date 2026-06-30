@@ -1,5 +1,7 @@
--- Battery Triage Map - SQLite 스키마 (테이블 3종)
--- 적용: python data/init_db.py
+-- Battery Triage Map - DB 스키마 (테이블 3종) — 사람이 읽기 위한 참고용
+-- ※ 실제 테이블 생성은 services/db.py 의 SQLAlchemy 정의가 담당한다
+--   (python data/init_db.py 실행 시 SQLite/PostgreSQL 모두 자동 생성).
+-- 이 파일은 구조를 한눈에 보기 위한 문서이며, 코드가 직접 읽지는 않는다.
 -- 데엔 모듈(services/triage.py · matching.py)의 실제 출력 구조에 맞춰 정의한다.
 
 -- ---------------------------------------------------------------------------
