@@ -81,25 +81,25 @@ st.markdown(
         /* 전체 화면 폭 사용 (모바일 제한 해제) */
         .block-container {
             max-width: 1100px;
-            padding-top: 0 !important;
+            padding-top: 1rem !important;
             padding-left: 24px;
             padding-right: 24px;
         }
 
-        /* ---------- 헤더 (sticky 고정) ---------- */
+        /* ---------- 헤더 (sticky 고정) ----------
+           Streamlit Cloud 배포 시 상단에 플랫폼 자체 툴바(Share/Deploy 등)가
+           추가로 존재하므로, top: 0이 아니라 약간의 여백을 둬서 겹치지 않게 함 */
         .triage-header {
             background-color: var(--c-primary);
-            border-radius: 0 0 14px 14px;
+            border-radius: 14px;
             padding: 14px 18px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             box-shadow: 0 2px 6px rgba(0,0,0,0.10);
             position: sticky;
-            top: 0;
+            top: 0.5rem;
             z-index: 999;
-            margin-left: -24px;
-            margin-right: -24px;
             margin-bottom: 16px;
         }
         .triage-header-left {
