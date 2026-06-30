@@ -572,12 +572,18 @@ def sync_fixed_header_position():
         <script>
         function alignTriageHeader() {
             const doc = window.parent.document;
-            const container = doc.querySelector('.block-container');
             const header = doc.querySelector('.triage-header');
-            if (!container || !header) return;
+            if (!header) return;
+            // 카드 유무와 무관하게 항상 .block-container 기준으로 일관되게 계산.
+            // .block-container는 좌우 24px 패딩이 있으므로(CSS의 padding-left/right: 24px),
+            // 그만큼 안쪽으로 보정해서 카드/표와 정확히 같은 폭이 되도록 함
+            const main = doc.querySelector('section[data-testid="stMain"]') || doc;
+            const container = main.querySelector('.block-container');
+            if (!container) return;
             const rect = container.getBoundingClientRect();
-            header.style.left = rect.left + 'px';
-            header.style.width = rect.width + 'px';
+            const PADDING = 24;
+            header.style.left = (rect.left + PADDING) + 'px';
+            header.style.width = (rect.width - PADDING * 2) + 'px';
         }
         alignTriageHeader();
         setTimeout(alignTriageHeader, 100);
