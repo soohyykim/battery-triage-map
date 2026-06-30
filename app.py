@@ -81,14 +81,17 @@ st.markdown(
         /* 전체 화면 폭 사용 (모바일 제한 해제) */
         .block-container {
             max-width: 1100px;
-            padding-top: 1rem !important;
+            padding-top: 5.5rem !important;
             padding-left: 24px;
             padding-right: 24px;
         }
 
-        /* ---------- 헤더 (sticky 고정) ----------
-           Streamlit Cloud 배포 시 상단에 플랫폼 자체 툴바(Share/Deploy 등)가
-           추가로 존재하므로, top: 0이 아니라 약간의 여백을 둬서 겹치지 않게 함 */
+        /* ---------- 헤더 (fixed 고정) ----------
+           position: sticky는 Streamlit의 내부 스크롤 컨테이너(stMain)의
+           overflow:auto 영향을 받아 Streamlit Cloud 배포 시 깨지므로,
+           viewport 기준으로 항상 고정되는 fixed로 전환.
+           헤더가 차지하는 높이만큼 .block-container에 padding-top을 줘서
+           본문 콘텐츠가 헤더 뒤에 가려지지 않게 함. */
         .triage-header {
             background-color: var(--c-primary);
             border-radius: 14px;
@@ -97,8 +100,11 @@ st.markdown(
             justify-content: space-between;
             align-items: center;
             box-shadow: 0 2px 6px rgba(0,0,0,0.10);
-            position: sticky;
-            top: 0.5rem;
+            position: fixed;
+            top: 4rem;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(1052px, calc(100% - 48px));
             z-index: 999;
             margin-bottom: 16px;
         }
