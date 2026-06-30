@@ -19,6 +19,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import pandas as pd
+import requests
 
 from battery_data import (
     fetch_batteries,
@@ -32,6 +33,7 @@ from battery_data import (
     STATUS_COLOR,
     GRADE_EMOJI,
     DUMMY_USER,
+    API_BASE_URL,
 )
 
 # ---------------------------------------------------------------------------
@@ -1121,81 +1123,70 @@ elif st.session_state.page == "intake":
 
                 st.session_state.intake_record = intake_record
 
-                condition_flags = intake_record["condition_flags"]
-                is_designated_waste = any([
-                    condition_flags["flooded"],
-                    condition_flags["leakage"],
-                    condition_flags["overheated"],
-                    condition_flags["swollen"],
-                    condition_flags["impact"],
-                ])
+                # 발생채널별 임시 좌표 (실제 채널 주소 DB가 없어 시연용으로 고정값 사용)
+                CHANNEL_COORDS = {
+                    "강남폐차센터": (37.4979, 127.0276),
+                    "수원폐차센터": (37.2636, 127.0286),
+                    "인천폐차센터": (37.4563, 126.7052),
+                }
+                origin_lat, origin_lon = CHANNEL_COORDS.get(
+                    st.session_state.channel_name, (37.5665, 126.9780)  # 기본값: 서울시청
+                )
 
-                if is_designated_waste:
-                    st.error("⚠️ 지정폐기물 판정 - 특별 처리 필요")
+                triage_payload = {
+                    "vin": vin,
+                    "vehicle_year": intake_record["vehicle_info"]["model_year"],
+                    "mileage_km": mileage_km,
+                    "capacity_kwh": capacity_kwh,
+                    "chemistry": intake_record["vehicle_info"]["chemistry"] or "UNKNOWN",
+                    "manufacturer": manufacturer or None,
+                    "model_name": model_name or None,
+                    "battery_count": quantity or 1,
+                    "condition_flags": intake_record["condition_flags"],
+                }
+
+                try:
+                    triage_res = requests.post(
+                        f"{API_BASE_URL}/triage", json=triage_payload, timeout=15
+                    )
+                    triage_res.raise_for_status()
+                    triage_result = triage_res.json()
+                except requests.RequestException as e:
+                    st.error(f"배터리 판정 요청에 실패했습니다: {e}")
                     st.stop()
 
-                current_year = datetime.now().year
-                vehicle_year = intake_record["vehicle_info"]["model_year"] or 2020
-                age = current_year - vehicle_year
-                soh_proxy = 100 - (age * 3.0) - (mileage_km / 10000 * 1.8)
-                soh_proxy = max(0, min(100, soh_proxy))
+                grade = triage_result.get("grade")
 
-                if soh_proxy >= 75:
-                    grade = "Green"
-                    recommended_path = "재사용 후보"
-                elif soh_proxy >= 60:
-                    grade = "Yellow"
-                    recommended_path = "추가진단 후 판단"
-                elif soh_proxy >= 40:
-                    grade = "Orange"
-                    recommended_path = "재활용 후보"
-                else:
-                    grade = "Gray"
-                    recommended_path = "정밀진단 필요"
+                if grade == "Red":
+                    st.error("⚠️ 지정폐기물 판정 - 특별 처리 필요")
+                    st.session_state.triage_result = triage_result
+                    st.session_state.matching_result = {
+                        "status": "no_match",
+                        "matched_companies": [],
+                        "grade": grade,
+                    }
+                    st.session_state.step = "approval"
+                    st.rerun()
 
-                triage_result = {
-                    "soh_proxy_score": round(soh_proxy, 1),
-                    "grade": grade,
-                    "recommended_path": recommended_path,
-                    "chemistry": intake_record["vehicle_info"]["chemistry"] or "UNKNOWN",
-                    "capacity_kwh": capacity_kwh,
-                }
+                triage_id = triage_result.get("triage_id")
 
-                mock_companies = [
-                    {
-                        "rank": 1,
-                        "company_name": "충청자원순환",
-                        "region": "충남",
-                        "distance_km": 79.9,
-                        "diagnostic_capability": "basic",
-                        "process_type": "재활용",
-                        "total_score": 85.3,
-                    },
-                    {
-                        "rank": 2,
-                        "company_name": "인천배터리리사이클",
-                        "region": "인천",
-                        "distance_km": 45.2,
-                        "diagnostic_capability": "kolas",
-                        "process_type": "재활용",
-                        "total_score": 78.1,
-                    },
-                    {
-                        "rank": 3,
-                        "company_name": "경기재활용센터",
-                        "region": "경기",
-                        "distance_km": 35.5,
-                        "diagnostic_capability": "basic",
-                        "process_type": "재활용",
-                        "total_score": 72.4,
-                    },
-                ]
-
-                matching_result = {
-                    "status": "matched",
-                    "matched_companies": mock_companies,
-                    "grade": grade,
-                }
+                try:
+                    match_res = requests.post(
+                        f"{API_BASE_URL}/match",
+                        json={
+                            "triage_result": triage_result,
+                            "origin_latitude": origin_lat,
+                            "origin_longitude": origin_lon,
+                            "max_results": 3,
+                            "triage_id": triage_id,
+                        },
+                        timeout=15,
+                    )
+                    match_res.raise_for_status()
+                    matching_result = match_res.json()
+                except requests.RequestException as e:
+                    st.error(f"처리업체 매칭 요청에 실패했습니다: {e}")
+                    matching_result = {"status": "no_match", "matched_companies": [], "grade": grade}
 
                 st.session_state.triage_result = triage_result
                 st.session_state.matching_result = matching_result
@@ -1344,7 +1335,18 @@ elif st.session_state.page == "intake":
                 unsafe_allow_html=True,
             )
 
-            for company in matching_result['matched_companies']:
+            matched_companies = matching_result.get('matched_companies') or []
+            if not matched_companies:
+                st.markdown(
+                    """
+                    <div style="background-color: var(--c-card); border: 1.5px solid var(--c-border); border-radius: 12px; padding: 16px; text-align: center; color: var(--c-muted-foreground); font-size: 13px;">
+                        추천 처리업체가 없습니다. (지정폐기물 또는 매칭 실패)
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            for company in matched_companies:
                 st.markdown(
                     f"""
                     <div style="background-color: var(--c-card); border: 1.5px solid var(--c-border); border-radius: 12px; padding: 14px; margin-bottom: 10px;">
@@ -1403,11 +1405,14 @@ elif st.session_state.page == "intake":
         triage_result = st.session_state.triage_result
         matching_result = st.session_state.matching_result
 
+        matched_companies = matching_result.get('matched_companies') or []
+        rank1_company_name = matched_companies[0]['company_name'] if matched_companies else "—"
+
         completion_info = {
             "timestamp": datetime.now().isoformat(),
             "vin": intake_record['identification']['vin'],
             "grade": triage_result['grade'],
-            "matched_company_rank1": matching_result['matched_companies'][0]['company_name'],
+            "matched_company_rank1": rank1_company_name,
             "status": "approved",
         }
 
