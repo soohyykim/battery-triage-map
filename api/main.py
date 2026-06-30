@@ -18,6 +18,7 @@ from pathlib import Path
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from api.schemas import (
     BatteryInput,
@@ -30,6 +31,8 @@ from api.schemas import (
     HistoryItem,
     HistoryDetail,
     ApproveRequest,
+    PdfTriageRequest,
+    PdfMatchRequest,
 )
 from services import triage as triage_svc
 from services import matching as matching_svc
@@ -177,3 +180,26 @@ def approve(triage_id: int, req: ApproveRequest):
     if not ok:
         raise HTTPException(status_code=404, detail=f"triage_id={triage_id} 이력 없음")
     return {"status": "approved", "triage_id": triage_id, "approved_by": req.approved_by}
+
+
+# ---------------------------------------------------------------------------
+# POST /pdf/triage  - 배터리 판정 결과서 PDF 발급
+# ---------------------------------------------------------------------------
+@app.post("/pdf/triage", tags=["pdf"])
+def pdf_triage(req: PdfTriageRequest):
+    from services import pdf as pdf_svc
+    path = pdf_svc.build_triage_report(req.triage_result)
+    return FileResponse(path, media_type="application/pdf", filename=Path(path).name)
+
+
+# ---------------------------------------------------------------------------
+# POST /pdf/match  - 처리기업 매칭 확인서 PDF 발급
+# ---------------------------------------------------------------------------
+@app.post("/pdf/match", tags=["pdf"])
+def pdf_match(req: PdfMatchRequest):
+    from services import pdf as pdf_svc
+    path = pdf_svc.build_match_confirm({
+        "triage_result": req.triage_result,
+        "matched_companies": req.matched_companies or [],
+    })
+    return FileResponse(path, media_type="application/pdf", filename=Path(path).name)

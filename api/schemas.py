@@ -163,3 +163,17 @@ class HistoryDetail(HistoryItem):
 
 class ApproveRequest(BaseModel):
     approved_by: str = Field(..., description="승인 담당자 이름/ID")
+
+
+# ---------------------------------------------------------------------------
+# POST /pdf/*  -> PDF 발급 (판정 결과서 · 매칭 확인서)
+# ---------------------------------------------------------------------------
+class PdfTriageRequest(BaseModel):
+    triage_result: Dict[str, Any] = Field(..., description="evaluate_battery() 반환값 (/triage 응답)")
+
+
+class PdfMatchRequest(BaseModel):
+    triage_result: Dict[str, Any] = Field(..., description="evaluate_battery() 반환값")
+    matched_companies: Optional[List[Dict[str, Any]]] = Field(
+        None, description="match_companies() 결과의 matched_companies (/match 응답)"
+    )
