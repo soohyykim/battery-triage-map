@@ -93,6 +93,14 @@ st.markdown(
            따라서 순수 CSS 고정값으로 전환: Streamlit 사이드바 기본 폭(21rem)과
            .block-container의 max-width(1100px) + 좌우 padding(24px)을 그대로
            계산해 헤더 위치/폭을 고정값으로 지정. */
+        html {
+            /* 세로 스크롤바가 있을 때와 없을 때 100vw 값이 달라져
+               헤더(fixed, 100vw 기준)와 카드(block-container 기준) 폭이
+               페이지마다 미세하게 어긋나는 문제 방지 → 스크롤바를 항상 표시해
+               100vw 계산 기준을 모든 페이지에서 동일하게 고정 */
+            overflow-y: scroll;
+        }
+
         .triage-header {
             background-color: var(--c-primary);
             border-radius: 14px;
@@ -164,6 +172,17 @@ st.markdown(
             border: 1.5px solid var(--c-border) !important;
             padding: 16px !important;
             box-shadow: none !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }
+        /* Streamlit이 카드를 감싸는 상위 element-container에 거터(margin/padding)를
+           추가로 붙이는 경우가 있어, 헤더와 폭이 미세하게 어긋나 보임 → 0으로 강제 */
+        div[data-testid="stVerticalBlockBorderWrapper"] > div {
+            width: 100% !important;
+        }
+        .block-container > div[data-testid="stVerticalBlock"] {
+            width: 100% !important;
+            gap: 0 !important;
         }
 
         /* ---------- 섹션 타이틀 ---------- */
