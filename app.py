@@ -1270,7 +1270,7 @@ elif st.session_state.page == "intake":
                         </div>
                         <div class="info-item">
                             <span class="info-label">용량</span>
-                            <span class="info-value">{triage_result['capacity_kwh']} kWh</span>
+                            <span class="info-value">{intake_record['identification']['capacity_kwh']} kWh</span>
                         </div>
                     </div>
                 </div>
@@ -1292,14 +1292,21 @@ elif st.session_state.page == "intake":
                 unsafe_allow_html=True,
             )
 
-            grade_emoji = {"Green": "✅", "Yellow": "⚠️", "Orange": "⚡", "Gray": "❌"}
+            grade_emoji = {"Green": "✅", "Yellow": "⚠️", "Orange": "⚡", "Gray": "❌", "Red": "🚫"}
+            path_label = {
+                "reuse_candidate": "재사용 후보",
+                "reuse_or_recycle_after_diagnosis": "추가진단 후 판단",
+                "recycle_candidate": "재활용 후보",
+                "diagnosis_required": "정밀진단 필요",
+                "designated_waste": "지정폐기물 처리",
+            }.get(triage_result['recommended_path'], triage_result['recommended_path'])
             st.markdown(
                 f"""
                 <div class="info-card">
                     <div class="info-card-row">
                         <div class="info-item">
                             <span class="info-label">SOH Proxy</span>
-                            <span class="info-value">{triage_result['soh_proxy_score']}%</span>
+                            <span class="info-value">{f"{triage_result['soh_proxy_score']}%" if triage_result.get('soh_proxy_score') is not None else "—"}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">등급</span>
@@ -1309,11 +1316,11 @@ elif st.session_state.page == "intake":
                     <div class="info-card-row">
                         <div class="info-item">
                             <span class="info-label">처리 방향</span>
-                            <span class="info-value">{triage_result['recommended_path']}</span>
+                            <span class="info-value">{path_label}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">화학계</span>
-                            <span class="info-value">{triage_result['chemistry']}</span>
+                            <span class="info-value">{intake_record['vehicle_info']['chemistry'] or 'UNKNOWN'}</span>
                         </div>
                     </div>
                 </div>
