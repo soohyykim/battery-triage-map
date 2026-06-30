@@ -359,9 +359,23 @@ st.markdown(
            =================================================================== */
         section[data-testid="stSidebar"] {
             background-color: #142f4b !important;
+            border: none !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
+        section[data-testid="stSidebar"] > div {
+            border: none !important;
+            box-shadow: none !important;
+            outline: none !important;
+        }
+        section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+            border: none !important;
+            box-shadow: none !important;
+            outline: none !important;
         }
         section[data-testid="stSidebar"] * {
             background-color: transparent !important;
+            border-color: transparent !important;
         }
         section[data-testid="stSidebar"] .block-container {
             max-width: none;
@@ -376,12 +390,12 @@ st.markdown(
             align-items: center;
             gap: 10px;
             padding: 4px 4px 16px 4px;
-            border-bottom: 1px solid rgba(255,255,255,0.15);
+            border-bottom: 1px solid rgba(255,255,255,0.15) !important;
             margin-bottom: 14px;
         }
         .sidebar-logo-box {
             background-color: rgba(0,181,181,0.20) !important;
-            border: 1px solid rgba(0,181,181,0.40);
+            border: 1px solid rgba(0,181,181,0.40) !important;
             border-radius: 10px;
             width: 34px;
             height: 34px;
@@ -398,7 +412,7 @@ st.markdown(
 
         .sidebar-login-box {
             background-color: rgba(255,255,255,0.08) !important;
-            border: 1px solid rgba(255,255,255,0.15);
+            border: 1px solid rgba(255,255,255,0.15) !important;
             border-radius: 10px;
             padding: 10px 12px;
             margin-top: 16px;
