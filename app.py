@@ -377,6 +377,23 @@ st.markdown(
             background-color: transparent !important;
             border-color: transparent !important;
         }
+        /* 위 전체 투명화 규칙(specificity 0-1-1)보다 우선순위를 확보하기 위해
+           "section[data-testid=stSidebar] .클래스명" 형태로 동일하게 구체적인
+           선택자를 사용해, 의도적으로 색을 넣어야 하는 요소들만 다시 복원 */
+        section[data-testid="stSidebar"] .sidebar-logo-box {
+            background-color: rgba(0,181,181,0.20) !important;
+            border-color: rgba(0,181,181,0.40) !important;
+        }
+        section[data-testid="stSidebar"] .sidebar-login-box {
+            background-color: rgba(255,255,255,0.08) !important;
+            border-color: rgba(255,255,255,0.15) !important;
+        }
+        section[data-testid="stSidebar"] .sidebar-login-avatar {
+            background-color: var(--c-accent) !important;
+        }
+        section[data-testid="stSidebar"] .sidebar-logo {
+            border-bottom-color: rgba(255,255,255,0.15) !important;
+        }
         section[data-testid="stSidebar"] .block-container {
             max-width: none;
             padding: 16px 12px;
