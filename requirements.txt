@@ -1,19 +1,19 @@
-﻿fastapi==0.115.0
-uvicorn[standard]==0.30.6
-pydantic==2.9.2
-python-multipart==0.0.12
-langchain==0.3.3
-langchain-community==0.3.2
-langchain-openai==0.2.2
-chromadb>=1.5.9
-pymupdf==1.24.11
-fpdf2==2.8.1
-openai==1.51.0
-requests==2.32.3
+streamlit==1.40.0
+fastapi==0.111.0
+uvicorn==0.30.0
+chromadb==0.5.0
+langchain==0.2.0
+langchain-anthropic==0.1.15
+folium==0.16.0
+streamlit-folium==0.20.0
+fpdf2==2.7.9
+pandas>=2.2.3
+requests==2.31.0
 python-dotenv==1.0.1
-pandas==2.2.3
-sqlalchemy==2.0.35
-psycopg2-binary==2.9.9
-streamlit==1.39.0
-folium==0.17.0
-streamlit-folium==0.23.1
+# QR코드 스캔 (headless: 서버 환경용, GUI 의존성 없음)
+opencv-python-headless>=4.10.0
+pillow>=10.4.0
+numpy>=1.26.4
+# Postgres 연동 (Render Blueprint - api/main.py 백엔드용)
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9

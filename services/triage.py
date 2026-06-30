@@ -1,14 +1,19 @@
-"""
-services/triage.py
-배터리 예비 평가(가치 판정) 모듈  [데이터 엔지니어 로직 이식]
+# services/triage.py
 
-Rule Engine(rule.py)을 통과한 '정상 평가 대상' 배터리에 대해,
-폐차장 등 현장에서 확보 가능한 기본 입력값(연식·주행거리·용량·화학계)으로
-잔존가치와 처리방향을 예비 추정한다.
-
-※ 실측 SOH 나 법적 최종 판정이 아니라 입력값 기반 'preliminary_estimate' 이다.
-출처: triage.ipynb (Colab 검증 완료) — 로직 수정 없이 이식.
 """
+Battery Triage Map - triage.py
+
+역할:
+- rule.py에서 지정폐기물로 분류되지 않은 배터리만 평가한다.
+- 연식, 주행거리, 배터리 용량, 화학계를 기반으로 예비 점수를 계산한다.
+- Green / Yellow / Orange / Gray 등급을 부여한다.
+- 재사용/재활용은 법적 최종 판단이 아니라 예비 추천으로만 출력한다.
+
+주의:
+- 이 모듈은 SOH 실측 모델이 아니다.
+- 처리업체의 실제 진단 전까지 법적 지위와 최종 처리경로는 확정하지 않는다.
+"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -375,17 +380,3 @@ def evaluate_battery(
         "data_confidence": data_confidence,
         "reason_codes": reason_codes,
     }
-
-
-if __name__ == "__main__":
-    # 데엔 검증 테스트 5종 — 노트북 출력과 동일해야 한다 (회귀 기준)
-    cases = [
-        ("좋은 NCM", dict(vehicle_year=2024, mileage_km=15000, capacity_kwh=77.4, chemistry="NCM", manufacturer="현대자동차", model_name="IONIQ5", current_year=2026)),
-        ("중간 NCM", dict(vehicle_year=2020, mileage_km=85000, capacity_kwh=64.0, chemistry="NCM", manufacturer="현대자동차", model_name="IONIQ5", current_year=2026)),
-        ("노후 NCM", dict(vehicle_year=2017, mileage_km=180000, capacity_kwh=58.0, chemistry="NCM", manufacturer="기아", model_name="NIRO EV", current_year=2026)),
-        ("정보부족", dict(vehicle_year=None, mileage_km=None, capacity_kwh=None, chemistry="UNKNOWN", current_year=2026)),
-        ("LFP", dict(vehicle_year=2022, mileage_km=40000, capacity_kwh=58.0, chemistry="LFP", manufacturer="기아", model_name="EV3", current_year=2026)),
-    ]
-    for name, kw in cases:
-        r = evaluate_battery(**kw)
-        print(f"{name:8s} → {r['grade']:6s} | reuse={r['reuse_score']} recycle={r['recycle_score']} | {r['recommended_path']}")
