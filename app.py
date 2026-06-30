@@ -80,7 +80,7 @@ st.markdown(
 
         /* 전체 화면 폭 사용 (모바일 제한 해제) */
         .block-container {
-            max-width: 1100px;
+            max-width: 1100px !important;
             padding-top: 5.5rem !important;
             padding-left: 24px;
             padding-right: 24px;
@@ -581,14 +581,28 @@ def sync_fixed_header_position():
             const container = main.querySelector('.block-container');
             if (!container) return;
             const rect = container.getBoundingClientRect();
+            if (rect.width === 0) return; // 아직 레이아웃이 안 잡힌 경우 스킵
             const PADDING = 24;
             header.style.left = (rect.left + PADDING) + 'px';
             header.style.width = (rect.width - PADDING * 2) + 'px';
         }
         alignTriageHeader();
-        setTimeout(alignTriageHeader, 100);
-        setTimeout(alignTriageHeader, 400);
+        // 레이아웃이 비동기로 여러 번 재계산될 수 있어 여러 시점에 재측정
+        [50, 100, 200, 400, 700, 1000, 1500].forEach(function(ms) {
+            setTimeout(alignTriageHeader, ms);
+        });
         window.parent.addEventListener('resize', alignTriageHeader);
+        // DOM 변화(카드 추가/삭제, 레이아웃 폭 변경 등)가 감지될 때마다 재측정
+        try {
+            const observeTarget = window.parent.document.querySelector('section[data-testid="stMain"]');
+            if (observeTarget && !window.parent.__triageHeaderObserverAttached) {
+                const observer = new MutationObserver(function() {
+                    alignTriageHeader();
+                });
+                observer.observe(observeTarget, { childList: true, subtree: true, attributes: true });
+                window.parent.__triageHeaderObserverAttached = true;
+            }
+        } catch (e) {}
         </script>
         """,
         unsafe_allow_html=True,
