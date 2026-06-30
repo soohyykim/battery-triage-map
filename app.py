@@ -90,6 +90,8 @@ st.markdown(
            position: sticky는 Streamlit의 내부 스크롤 컨테이너(stMain)의
            overflow:auto 영향을 받아 Streamlit Cloud 배포 시 깨지므로,
            viewport 기준으로 항상 고정되는 fixed로 전환.
+           left/width는 CSS 고정값이 아니라 JS로 본문(stMain) 영역의 실제
+           좌표를 측정해 동적으로 맞춤 (사이드바 유무/폭과 무관하게 항상 정렬됨).
            헤더가 차지하는 높이만큼 .block-container에 padding-top을 줘서
            본문 콘텐츠가 헤더 뒤에 가려지지 않게 함. */
         .triage-header {
@@ -102,11 +104,9 @@ st.markdown(
             box-shadow: 0 2px 6px rgba(0,0,0,0.10);
             position: fixed;
             top: 4rem;
-            left: 50%;
-            transform: translateX(-50%);
-            width: min(1052px, calc(100% - 48px));
             z-index: 999;
             margin-bottom: 16px;
+            transition: left 0.1s ease, width 0.1s ease;
         }
         .triage-header-left {
             display: flex;
@@ -559,6 +559,36 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+
+def sync_fixed_header_position():
+    """
+    fixed 헤더(.triage-header)의 left/width를 본문 영역(.block-container)의
+    실제 화면 좌표에 맞춰 동적으로 정렬한다.
+    사이드바 유무·폭과 무관하게 항상 본문 카드와 헤더가 일직선으로 맞도록
+    리사이즈/렌더링 시점마다 좌표를 재계산해서 헤더에 인라인 스타일로 적용한다.
+    """
+    st.markdown(
+        """
+        <script>
+        function alignTriageHeader() {
+            const doc = window.parent.document;
+            const container = doc.querySelector('.block-container');
+            const header = doc.querySelector('.triage-header');
+            if (!container || !header) return;
+            const rect = container.getBoundingClientRect();
+            header.style.left = rect.left + 'px';
+            header.style.width = rect.width + 'px';
+        }
+        alignTriageHeader();
+        setTimeout(alignTriageHeader, 100);
+        setTimeout(alignTriageHeader, 400);
+        window.parent.addEventListener('resize', alignTriageHeader);
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 # ---------------------------------------------------------------------------
 # QR/바코드 디코딩 함수
 # ---------------------------------------------------------------------------
@@ -647,6 +677,7 @@ if st.session_state.page == "battery_list":
         """,
         unsafe_allow_html=True,
     )
+    sync_fixed_header_position()
 
     # --- 상태 필터만 (발생채널은 로그인 시 자동 결정되므로 제거) ---
     channel_filter = DUMMY_USER["channel_name"]  # 로그인 정보로 자동 고정
@@ -758,6 +789,7 @@ elif st.session_state.page == "intake":
             """,
             unsafe_allow_html=True,
         )
+        sync_fixed_header_position()
 
         # 01. 식별 정보
         card01 = st.container(border=True)
@@ -1149,6 +1181,7 @@ elif st.session_state.page == "intake":
             """,
             unsafe_allow_html=True,
         )
+        sync_fixed_header_position()
 
         intake_record = st.session_state.intake_record
         triage_result = st.session_state.triage_result
