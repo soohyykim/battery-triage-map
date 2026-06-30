@@ -87,13 +87,12 @@ st.markdown(
         }
 
         /* ---------- 헤더 (fixed 고정) ----------
-           position: sticky는 Streamlit의 내부 스크롤 컨테이너(stMain)의
-           overflow:auto 영향을 받아 Streamlit Cloud 배포 시 깨지므로,
-           viewport 기준으로 항상 고정되는 fixed로 전환.
-           left/width는 CSS 고정값이 아니라 JS로 본문(stMain) 영역의 실제
-           좌표를 측정해 동적으로 맞춤 (사이드바 유무/폭과 무관하게 항상 정렬됨).
-           헤더가 차지하는 높이만큼 .block-container에 padding-top을 줘서
-           본문 콘텐츠가 헤더 뒤에 가려지지 않게 함. */
+           이전에 JS(getBoundingClientRect)로 동적 정렬을 시도했으나,
+           Streamlit은 st.markdown(unsafe_allow_html=True) 안의 <script>를
+           보안 정책상 실행하지 않아 전혀 작동하지 않았음.
+           따라서 순수 CSS 고정값으로 전환: Streamlit 사이드바 기본 폭(21rem)과
+           .block-container의 max-width(1100px) + 좌우 padding(24px)을 그대로
+           계산해 헤더 위치/폭을 고정값으로 지정. */
         .triage-header {
             background-color: var(--c-primary);
             border-radius: 14px;
@@ -104,9 +103,14 @@ st.markdown(
             box-shadow: 0 2px 6px rgba(0,0,0,0.10);
             position: fixed;
             top: 4rem;
+            /* 본문 영역(전체 화면 - 사이드바 21rem) 안에서 .block-container가
+               가운데 정렬되므로, 본문 영역이 1100px보다 넓을 때 생기는
+               좌측 여백만큼 21rem에 더해준다. 거기에 패딩 24px을 더 빼서
+               카드 시작 위치와 정확히 맞춤. */
+            left: calc(21rem + max(0px, (100vw - 21rem - 1100px) / 2) + 24px);
+            width: min(1052px, calc(100vw - 21rem - 48px));
             z-index: 999;
             margin-bottom: 16px;
-            transition: left 0.1s ease, width 0.1s ease;
         }
         .triage-header-left {
             display: flex;
@@ -560,55 +564,6 @@ with st.sidebar:
     )
 
 
-def sync_fixed_header_position():
-    """
-    fixed 헤더(.triage-header)의 left/width를 본문 영역(.block-container)의
-    실제 화면 좌표에 맞춰 동적으로 정렬한다.
-    사이드바 유무·폭과 무관하게 항상 본문 카드와 헤더가 일직선으로 맞도록
-    리사이즈/렌더링 시점마다 좌표를 재계산해서 헤더에 인라인 스타일로 적용한다.
-    """
-    st.markdown(
-        """
-        <script>
-        function alignTriageHeader() {
-            const doc = window.parent.document;
-            const header = doc.querySelector('.triage-header');
-            if (!header) return;
-            // 카드 유무와 무관하게 항상 .block-container 기준으로 일관되게 계산.
-            // .block-container는 좌우 24px 패딩이 있으므로(CSS의 padding-left/right: 24px),
-            // 그만큼 안쪽으로 보정해서 카드/표와 정확히 같은 폭이 되도록 함
-            const main = doc.querySelector('section[data-testid="stMain"]') || doc;
-            const container = main.querySelector('.block-container');
-            if (!container) return;
-            const rect = container.getBoundingClientRect();
-            if (rect.width === 0) return; // 아직 레이아웃이 안 잡힌 경우 스킵
-            const PADDING = 24;
-            header.style.left = (rect.left + PADDING) + 'px';
-            header.style.width = (rect.width - PADDING * 2) + 'px';
-        }
-        alignTriageHeader();
-        // 레이아웃이 비동기로 여러 번 재계산될 수 있어 여러 시점에 재측정
-        [50, 100, 200, 400, 700, 1000, 1500].forEach(function(ms) {
-            setTimeout(alignTriageHeader, ms);
-        });
-        window.parent.addEventListener('resize', alignTriageHeader);
-        // DOM 변화(카드 추가/삭제, 레이아웃 폭 변경 등)가 감지될 때마다 재측정
-        try {
-            const observeTarget = window.parent.document.querySelector('section[data-testid="stMain"]');
-            if (observeTarget && !window.parent.__triageHeaderObserverAttached) {
-                const observer = new MutationObserver(function() {
-                    alignTriageHeader();
-                });
-                observer.observe(observeTarget, { childList: true, subtree: true, attributes: true });
-                window.parent.__triageHeaderObserverAttached = true;
-            }
-        } catch (e) {}
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 # ---------------------------------------------------------------------------
 # QR/바코드 디코딩 함수
 # ---------------------------------------------------------------------------
@@ -697,7 +652,6 @@ if st.session_state.page == "battery_list":
         """,
         unsafe_allow_html=True,
     )
-    sync_fixed_header_position()
 
     # --- 상태 필터만 (발생채널은 로그인 시 자동 결정되므로 제거) ---
     channel_filter = DUMMY_USER["channel_name"]  # 로그인 정보로 자동 고정
@@ -809,7 +763,6 @@ elif st.session_state.page == "intake":
             """,
             unsafe_allow_html=True,
         )
-        sync_fixed_header_position()
 
         # 01. 식별 정보
         card01 = st.container(border=True)
@@ -1201,7 +1154,6 @@ elif st.session_state.page == "intake":
             """,
             unsafe_allow_html=True,
         )
-        sync_fixed_header_position()
 
         intake_record = st.session_state.intake_record
         triage_result = st.session_state.triage_result
