@@ -13,7 +13,6 @@ Battery Triage Map - matching.py
 - 처리업체 DB는 외부에서 pandas DataFrame 형태로 전달받는다.
 - 실제 운영 단계에서는 인허가 정보, 행정처분 이력, 실시간 처리용량 등을 추가로 반영해야 한다.
 """
-
 from __future__ import annotations
 
 import math
@@ -71,6 +70,7 @@ def _haversine_km(
     lat2_rad = math.radians(float(lat2))
     lon2_rad = math.radians(float(lon2))
 
+
     dlat = lat2_rad - lat1_rad
     dlon = lon2_rad - lon1_rad
 
@@ -94,6 +94,7 @@ def _is_diagnostic_sufficient(
     company_rank = DIAGNOSTIC_RANK.get(str(company_capability), -1)
     required_rank = DIAGNOSTIC_RANK.get(str(required_capability), 0)
 
+
     return company_rank >= required_rank
 
 
@@ -101,6 +102,7 @@ def _expected_process_type(recommended_path: str) -> Optional[str]:
     """
     triage.py의 예비 처리방향에 따라 우선적으로 필요한 처리유형을 정한다.
     """
+
 
     if recommended_path == "reuse_candidate":
         return "reuse"
@@ -121,6 +123,7 @@ def _expected_process_type(recommended_path: str) -> Optional[str]:
 
 
 def _filter_companies(
+
     companies_df: pd.DataFrame,
     grade: str,
     chemistry: str,
@@ -139,6 +142,7 @@ def _filter_companies(
 
     for _, row in companies_df.iterrows():
         # 1. 운영 중인지 확인
+
         if not _to_bool(row.get("is_active", False)):
             continue
 
@@ -152,6 +156,7 @@ def _filter_companies(
                 continue
 
         # 3. 등급 처리 가능 여부 확인
+
         accepted_grade = _split_values(row.get("accepted_grade"))
 
         if grade not in accepted_grade:
