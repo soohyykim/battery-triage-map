@@ -11,7 +11,7 @@ pandas>=2.2.3
 requests==2.31.0
 python-dotenv==1.0.1
 
-# QR코드 스캔
-opencv-python==4.8.1.78
+# QR코드 스캔 (headless: 서버 환경용, GUI 의존성 없음)
+opencv-python-headless>=4.10.0
 pillow>=10.4.0
 numpy>=1.26.4
