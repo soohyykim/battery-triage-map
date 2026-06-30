@@ -81,7 +81,7 @@ st.markdown(
         /* 전체 화면 폭 사용 (모바일 제한 해제) */
         .block-container {
             max-width: 1100px !important;
-            padding-top: 5.5rem !important;
+            padding-top: 1.5rem !important;
             padding-left: 24px;
             padding-right: 24px;
         }
@@ -93,14 +93,19 @@ st.markdown(
            따라서 순수 CSS 고정값으로 전환: Streamlit 사이드바 기본 폭(21rem)과
            .block-container의 max-width(1100px) + 좌우 padding(24px)을 그대로
            계산해 헤더 위치/폭을 고정값으로 지정. */
-        html {
-            /* 세로 스크롤바가 있을 때와 없을 때 100vw 값이 달라져
-               헤더(fixed, 100vw 기준)와 카드(block-container 기준) 폭이
-               페이지마다 미세하게 어긋나는 문제 방지 → 스크롤바를 항상 표시해
-               100vw 계산 기준을 모든 페이지에서 동일하게 고정 */
-            overflow-y: scroll;
-        }
-
+        /* ---------- 헤더 (sticky 고정) ----------
+           이전에 두 가지 방식을 시도했으나 모두 실패:
+           1) JS(getBoundingClientRect) 동적 정렬 → Streamlit이
+              st.markdown(unsafe_allow_html=True) 안의 <script>를 보안 정책상
+              실행하지 않아 작동하지 않음.
+           2) position: fixed + calc(21rem + ...) 고정값 계산 → 사이드바 실제
+              렌더링 폭이 21rem과 정확히 일치하지 않거나(폰트/스크롤바 등 영향),
+              fixed 요소는 100vw 기준이라 block-container의 실제 렌더링 폭과
+              근본적으로 별개의 좌표계라 페이지마다 미세하게 어긋남.
+           최종 해결: 헤더를 fixed로 따로 띄우지 않고, block-container 안의
+           일반 흐름 요소로 두되 position: sticky로 상단 고정. 이렇게 하면
+           헤더가 카드들과 똑같은 부모(block-container) 안에서 동일한 폭을
+           그대로 상속받으므로 구조적으로 어긋날 수가 없음. */
         .triage-header {
             background-color: var(--c-primary);
             border-radius: 14px;
@@ -109,14 +114,10 @@ st.markdown(
             justify-content: space-between;
             align-items: center;
             box-shadow: 0 2px 6px rgba(0,0,0,0.10);
-            position: fixed;
-            top: 4rem;
-            /* 본문 영역(전체 화면 - 사이드바 21rem) 안에서 .block-container가
-               가운데 정렬되므로, 본문 영역이 1100px보다 넓을 때 생기는
-               좌측 여백만큼 21rem에 더해준다. 거기에 패딩 24px을 더 빼서
-               카드 시작 위치와 정확히 맞춤. */
-            left: calc(21rem + max(0px, (100vw - 21rem - 1100px) / 2) + 24px);
-            width: min(1052px, calc(100vw - 21rem - 48px));
+            position: sticky;
+            top: 1rem;
+            width: 100%;
+            box-sizing: border-box;
             z-index: 999;
             margin-bottom: 16px;
         }
@@ -441,6 +442,7 @@ st.markdown(
             font-weight: 600 !important;
             font-size: 13px !important;
             border: none !important;
+            outline: none !important;
             border-radius: 8px !important;
             padding: 10px 12px !important;
             margin-bottom: 4px;
@@ -455,6 +457,30 @@ st.markdown(
         section[data-testid="stSidebar"] div.stButton button:hover,
         section[data-testid="stSidebar"] div[data-testid="stButton"] button:hover {
             background-color: rgba(0,181,181,0.20) !important;
+        }
+        /* 클릭(active)·키보드 포커스 시 Streamlit이 자체적으로 빨간/분홍 outline과
+           box-shadow 링을 추가로 그려서 "테두리"처럼 보이는 현상 방지 */
+        section[data-testid="stSidebar"] div.stButton button:focus,
+        section[data-testid="stSidebar"] div[data-testid="stButton"] button:focus,
+        section[data-testid="stSidebar"] div.stButton button:active,
+        section[data-testid="stSidebar"] div[data-testid="stButton"] button:active,
+        section[data-testid="stSidebar"] div.stButton button:focus-visible,
+        section[data-testid="stSidebar"] div[data-testid="stButton"] button:focus-visible,
+        section[data-testid="stSidebar"] div.stButton button:focus:not(:active),
+        section[data-testid="stSidebar"] div[data-testid="stButton"] button:focus:not(:active) {
+            border: none !important;
+            outline: none !important;
+            box-shadow: none !important;
+            background-color: rgba(0,181,181,0.20) !important;
+            color: #ffffff !important;
+        }
+        /* 버튼을 감싸는 부모 wrapper(element-container, stButton div 등)에
+           Streamlit 테마가 자체 border를 입히는 경우까지 함께 제거 */
+        section[data-testid="stSidebar"] div.stButton,
+        section[data-testid="stSidebar"] div[data-testid="stButton"],
+        section[data-testid="stSidebar"] div[data-testid="element-container"] {
+            border: none !important;
+            box-shadow: none !important;
         }
 
         .sidebar-bottom-spacer {
