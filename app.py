@@ -82,10 +82,10 @@ st.markdown(
 
         /* 전체 화면 폭 사용 (모바일 제한 해제) */
         .block-container {
-            max-width: 1100px !important;
-            padding-top: 1.5rem !important;
-            padding-left: 24px;
-            padding-right: 24px;
+            max-width: 1200px !important;
+            padding-top: 1rem !important;
+            padding-left: 0px !important;
+            padding-right: 0px !important;
         }
 
         /* ---------- 헤더 (fixed 고정) ----------
@@ -165,6 +165,21 @@ st.markdown(
             padding: 4px 9px;
             border-radius: 999px;
             white-space: nowrap;
+        }
+        .triage-header-user {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+        .triage-header-user-name {
+            color: rgba(255,255,255,0.95);
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .triage-header-user-channel {
+            color: rgba(255,255,255,0.55);
+            font-size: 10px;
         }
 
         /* ---------- 카드(번호 섹션)만 남기고 바깥 큰 박스 제거 ---------- */
@@ -489,51 +504,44 @@ st.markdown(
             margin: 0;
         }
 
-        /* 메뉴 — 박스 없이 호버 시 배경색만 변하는 리스트형 (클래스+testid 동시 지정으로 버전 호환) */
+        /* 사이드바 메뉴 버튼 — 텍스트 색상 통일, active는 배경으로만 구분 */
         section[data-testid="stSidebar"] div.stButton button,
         section[data-testid="stSidebar"] div[data-testid="stButton"] button {
             background-color: transparent !important;
-            color: #ffffff !important;
+            color: rgba(255,255,255,0.85) !important;
             text-align: left !important;
             justify-content: flex-start !important;
             box-shadow: none !important;
-            font-weight: 600 !important;
+            font-weight: 500 !important;
             font-size: 13px !important;
             border: none !important;
             outline: none !important;
-            border-radius: 8px !important;
-            padding: 10px 12px !important;
-            margin-bottom: 4px;
+            border-radius: 6px !important;
+            padding: 8px 12px !important;
+            margin-bottom: 2px;
             transition: background-color 0.15s ease;
         }
         section[data-testid="stSidebar"] div.stButton button p,
-        section[data-testid="stSidebar"] div[data-testid="stButton"] button p,
-        section[data-testid="stSidebar"] div.stButton button div,
-        section[data-testid="stSidebar"] div[data-testid="stButton"] button div {
-            color: #ffffff !important;
+        section[data-testid="stSidebar"] div[data-testid="stButton"] button p {
+            color: rgba(255,255,255,0.85) !important;
+            font-weight: 500 !important;
         }
         section[data-testid="stSidebar"] div.stButton button:hover,
         section[data-testid="stSidebar"] div[data-testid="stButton"] button:hover {
-            background-color: rgba(0,181,181,0.20) !important;
+            background-color: rgba(255,255,255,0.08) !important;
         }
-        /* 클릭(active)·키보드 포커스 시 Streamlit이 자체적으로 빨간/분홍 outline과
-           box-shadow 링을 추가로 그려서 "테두리"처럼 보이는 현상 방지 */
         section[data-testid="stSidebar"] div.stButton button:focus,
         section[data-testid="stSidebar"] div[data-testid="stButton"] button:focus,
         section[data-testid="stSidebar"] div.stButton button:active,
         section[data-testid="stSidebar"] div[data-testid="stButton"] button:active,
         section[data-testid="stSidebar"] div.stButton button:focus-visible,
-        section[data-testid="stSidebar"] div[data-testid="stButton"] button:focus-visible,
-        section[data-testid="stSidebar"] div.stButton button:focus:not(:active),
-        section[data-testid="stSidebar"] div[data-testid="stButton"] button:focus:not(:active) {
+        section[data-testid="stSidebar"] div[data-testid="stButton"] button:focus-visible {
             border: none !important;
             outline: none !important;
             box-shadow: none !important;
-            background-color: rgba(0,181,181,0.20) !important;
-            color: #ffffff !important;
+            background-color: rgba(255,255,255,0.08) !important;
+            color: rgba(255,255,255,0.85) !important;
         }
-        /* 버튼을 감싸는 부모 wrapper(element-container, stButton div 등)에
-           Streamlit 테마가 자체 border를 입히는 경우까지 함께 제거 */
         section[data-testid="stSidebar"] div.stButton,
         section[data-testid="stSidebar"] div[data-testid="stButton"],
         section[data-testid="stSidebar"] div[data-testid="element-container"] {
@@ -650,52 +658,30 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    if st.button("🔋  배터리 접수", use_container_width=True, key="nav_intake"):
+    if st.button("배터리 등록", use_container_width=True, key="nav_intake"):
         st.session_state.page = "intake"
         st.session_state.step = "input"
         st.rerun()
 
-    if st.button("📋  배터리 관리", use_container_width=True, key="nav_list"):
+    if st.button("배터리 관리", use_container_width=True, key="nav_list"):
         st.session_state.page = "battery_list"
         st.rerun()
 
-    # ── 구분선 + 채널 정보 ──────────────────────────
+    # ── 채널 정보 + 설정 (흐리게) ───────────────────
     st.markdown(
         f"""
         <div class="sidebar-divider"></div>
         <div class="sidebar-group-label">채널 정보</div>
-        <div class="sidebar-info-row">🏢 {DUMMY_USER['channel_name']}</div>
-        <div class="sidebar-info-row">📌 {DUMMY_USER['channel_type']}</div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    # ── 구분선 + 설정 ────────────────────────────────
-    st.markdown(
-        """
+        <div class="sidebar-info-row">{DUMMY_USER['channel_name']}</div>
+        <div class="sidebar-info-row">{DUMMY_USER['channel_type']}</div>
         <div class="sidebar-divider"></div>
         <div class="sidebar-group-label">설정</div>
-        <div class="sidebar-menu-disabled">⚙️  발생채널 설정</div>
-        <div class="sidebar-menu-disabled">📊  통계 / 리포트</div>
+        <div class="sidebar-menu-disabled">발생채널 설정</div>
+        <div class="sidebar-menu-disabled">통계 / 리포트</div>
         """,
         unsafe_allow_html=True,
     )
-
-    # ── 로그인 정보 (맨 아래 고정) ──────────────────
     user_initial = DUMMY_USER["name"][0]
-    st.markdown(
-        f"""
-        <div class="sidebar-bottom-spacer"></div>
-        <div class="sidebar-login-box">
-            <div class="sidebar-login-avatar">{user_initial}</div>
-            <div>
-                <p class="sidebar-login-name">{DUMMY_USER['name']} 님 로그인됨</p>
-                <p class="sidebar-login-sub">🏢 {DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</p>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -781,7 +767,10 @@ if st.session_state.page == "battery_list":
                     <p class="triage-header-text-main">배터리 관리</p>
                 </div>
             </div>
-            <div class="triage-channel-badge">⚠️ 더미 데이터</div>
+            <div class="triage-header-user">
+                <span class="triage-header-user-name">{DUMMY_USER['name']} 님</span>
+                <span class="triage-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1098,11 +1087,14 @@ elif st.session_state.page == "intake":
                 <div class="triage-header-left">
                     <div class="triage-logo-box">🔋</div>
                     <div>
-                        <p class="triage-header-text-sub">🏢 {st.session_state.channel_name}</p>
-                        <p class="triage-header-text-main">사용후 배터리 접수</p>
+                        <p class="triage-header-text-sub">{st.session_state.channel_name}</p>
+                        <p class="triage-header-text-main">배터리 등록</p>
                     </div>
                 </div>
-                <div class="triage-channel-badge">발생채널 · {st.session_state.channel_type}</div>
+                <div class="triage-header-user">
+                    <span class="triage-header-user-name">{DUMMY_USER['name']} 님</span>
+                    <span class="triage-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
