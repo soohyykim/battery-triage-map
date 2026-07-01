@@ -532,34 +532,34 @@ st.markdown(
         }
         .summary-grid {
             display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 8px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
         }
         @media (max-width: 900px) {
             .summary-grid {
-                grid-template-columns: repeat(4, 1fr);
+                grid-template-columns: repeat(3, 1fr);
             }
         }
         @media (max-width: 480px) {
             .summary-grid {
-                grid-template-columns: repeat(3, 1fr);
+                grid-template-columns: repeat(2, 1fr);
             }
         }
         .summary-inner-box {
             background-color: var(--c-secondary);
             border: 1px solid var(--c-border);
-            border-radius: 8px;
-            padding: 10px 4px;
+            border-radius: 10px;
+            padding: 14px 8px;
             text-align: center;
         }
         .summary-inner-label {
-            font-size: 10px;
+            font-size: 11px;
             font-weight: 600;
             color: var(--c-muted-foreground);
-            margin-bottom: 4px;
+            margin-bottom: 6px;
         }
         .summary-inner-count {
-            font-size: 18px;
+            font-size: 22px;
             font-weight: 700;
             color: var(--c-foreground);
         }
