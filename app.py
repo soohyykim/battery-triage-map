@@ -603,7 +603,7 @@ if "show_detail_panel" not in st.session_state:
     st.session_state.show_detail_panel = False
 
 # ---------------------------------------------------------------------------
-# 사이드바 — 로고 / 로그인 정보 / 메뉴(박스 분리)
+# 사이드바 — 로고 / 메뉴 그룹 / 로그인 정보
 # ---------------------------------------------------------------------------
 with st.sidebar:
     st.markdown(
@@ -616,16 +616,97 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    if st.button("📝  배터리 접수", use_container_width=True):
+    # ── 접수 관리 그룹 ──────────────────────────────
+    st.markdown(
+        """
+        <div style="
+            font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+            color: rgba(255,255,255,0.4); text-transform: uppercase;
+            padding: 12px 4px 6px 4px; margin-top: 4px;
+        ">접수 관리</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    is_intake = st.session_state.page == "intake"
+    is_list   = st.session_state.page == "battery_list"
+
+    if st.button(
+        "🔋  배터리 접수",
+        use_container_width=True,
+        type="primary" if is_intake else "secondary",
+        key="nav_intake",
+    ):
         st.session_state.page = "intake"
         st.session_state.step = "input"
         st.rerun()
 
-    if st.button("📋  배터리 관리", use_container_width=True):
+    if st.button(
+        "📋  배터리 관리",
+        use_container_width=True,
+        type="primary" if is_list else "secondary",
+        key="nav_list",
+    ):
         st.session_state.page = "battery_list"
         st.rerun()
 
-    # 로그인 정보 — 사이드바 맨 아래 고정 (flexbox spacer로 밀어냄)
+    # ── 구분선 ──────────────────────────────────────
+    st.markdown(
+        """
+        <div style="
+            border-top: 1px solid rgba(255,255,255,0.12);
+            margin: 14px 0 6px 0;
+        "></div>
+        <div style="
+            font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+            color: rgba(255,255,255,0.4); text-transform: uppercase;
+            padding: 2px 4px 6px 4px;
+        ">채널 정보</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f"""
+        <div style="padding: 4px; font-size: 12px; color: rgba(255,255,255,0.7); line-height: 1.8;">
+            <div>🏢 {DUMMY_USER['channel_name']}</div>
+            <div>📌 {DUMMY_USER['channel_type']}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ── 구분선 ──────────────────────────────────────
+    st.markdown(
+        """
+        <div style="
+            border-top: 1px solid rgba(255,255,255,0.12);
+            margin: 14px 0 6px 0;
+        "></div>
+        <div style="
+            font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+            color: rgba(255,255,255,0.4); text-transform: uppercase;
+            padding: 2px 4px 6px 4px;
+        ">설정</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <div style="
+            padding: 8px 12px; border-radius: 8px; cursor: not-allowed;
+            opacity: 0.4; font-size: 13px; font-weight: 600; color: #fff;
+        ">⚙️  발생채널 설정</div>
+        <div style="
+            padding: 8px 12px; border-radius: 8px; cursor: not-allowed;
+            opacity: 0.4; font-size: 13px; font-weight: 600; color: #fff;
+        ">📊  통계 / 리포트</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ── 로그인 정보 (맨 아래 고정) ──────────────────
     user_initial = DUMMY_USER["name"][0]
     st.markdown(
         f"""
@@ -731,11 +812,32 @@ if st.session_state.page == "battery_list":
         unsafe_allow_html=True,
     )
 
-    # --- 상태 필터 ---
-    channel_filter = DUMMY_USER["channel_name"]
-    status_filter = st.selectbox("상태 필터", ALL_STATUSES, key="status_filter")
+    # --- WMS 스타일 검색 필터 폼 ---
+    with st.container(border=True):
+        fc1, fc2, fc3, fc4 = st.columns([2, 1, 1, 1])
+        with fc1:
+            search_vin = st.text_input("🔍 VIN / 모델명 검색", placeholder="VIN 또는 모델명 입력", key="search_vin", label_visibility="collapsed")
+            st.caption("VIN / 모델명 검색")
+        with fc2:
+            search_grade = st.selectbox("등급", ["전체", "Green", "Yellow", "Orange", "Gray", "Red", "미판정"], key="search_grade", label_visibility="collapsed")
+            st.caption("등급 필터")
+        with fc3:
+            status_filter = st.selectbox("상태", ALL_STATUSES, key="status_filter", label_visibility="collapsed")
+            st.caption("상태 필터")
+        with fc4:
+            st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+            col_srch, col_reset = st.columns(2)
+            with col_srch:
+                do_search = st.button("조회", use_container_width=True, type="primary")
+            with col_reset:
+                if st.button("초기화", use_container_width=True):
+                    st.session_state.pop("search_vin", None)
+                    st.session_state.pop("search_grade", None)
+                    st.session_state.pop("status_filter", None)
+                    st.rerun()
 
     # --- 상태별 요약 카드 ---
+    channel_filter = DUMMY_USER["channel_name"]
     counts = get_status_counts(channel_name=channel_filter)
     summary_targets = ALL_STATUSES[1:]
     inner_boxes = "".join(
@@ -746,8 +848,21 @@ if st.session_state.page == "battery_list":
     summary_html = f'<div class="summary-outer"><div class="summary-grid">{inner_boxes}</div></div>'
     st.markdown(summary_html, unsafe_allow_html=True)
 
-    # --- 배터리 데이터 로드 ---
-    batteries = fetch_batteries(channel_name=channel_filter, status=status_filter)
+    # --- 배터리 데이터 로드 (검색 필터 적용) ---
+    _status_f = st.session_state.get("status_filter", "전체")
+    _grade_f  = st.session_state.get("search_grade", "전체")
+    _vin_f    = st.session_state.get("search_vin", "").strip()
+
+    batteries = fetch_batteries(channel_name=channel_filter, status=_status_f if _status_f != "전체" else None)
+
+    # 클라이언트 사이드 추가 필터 (등급, VIN/모델명 검색)
+    if _grade_f and _grade_f != "전체":
+        batteries = [b for b in batteries if (b.get("grade") or "미판정") == _grade_f]
+    if _vin_f:
+        kw = _vin_f.lower()
+        batteries = [b for b in batteries if
+                     kw in (b.get("vin") or "").lower() or
+                     kw in (b.get("model_name") or "").lower()]
 
     if not batteries:
         st.info("조건에 맞는 배터리가 없습니다.")
