@@ -1,26 +1,14 @@
-# render.yaml - Render.com 배포 설정 (Blueprint)
-# Render 대시보드 New > Blueprint 로 이 repo를 연결하면 아래 설정이 자동 적용된다.
-# - 웹 서비스(FastAPI) + PostgreSQL DB 를 한 번에 생성하고 DATABASE_URL 을 자동 주입한다.
-# - 무료 PostgreSQL 은 생성 후 약 90일이 지나면 만료된다(공모전 기간엔 충분).
-databases:
-  - name: battery-triage-db
-    plan: free
-    databaseName: battery
-    user: battery
-
 services:
   - type: web
     name: battery-triage-map-api
     runtime: python
     plan: free
-    branch: feat/api-rag-pdf          # 백엔드 최신 코드 브랜치 (main 머지 후 변경 가능)
-    buildCommand: "pip install -r requirements.txt && python data/init_db.py && python build_index.py"
+    branch: feat/api-rag-pdf
+    buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn api.main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PYTHON_VERSION
         value: "3.11.9"
-      - key: DATABASE_URL              # 위 PostgreSQL 의 접속 주소를 자동으로 연결
-        fromDatabase:
-          name: battery-triage-db
-          property: connectionString
-    autoDeploy: true                  # 브랜치에 push 하면 자동 재배포
+      - key: DATABASE_URL
+        sync: false
+    autoDeploy: true

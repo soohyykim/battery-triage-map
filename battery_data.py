@@ -1,4 +1,4 @@
-"""
+﻿"""
 배터리 관리 페이지 — 데이터 접근 레이어 (실제 API 연동 버전)
 
 백엔드 엔드포인트:
@@ -20,7 +20,7 @@ import streamlit as st
 # ---------------------------------------------------------------------------
 # 백엔드 API 주소
 # ---------------------------------------------------------------------------
-API_BASE_URL = os.environ.get("API_BASE_URL", "https://battery-triage-map-api.onrender.com")
+API_BASE_URL = os.environ.get("API_BASE_URL", "https://battery-triage-map-api-ve2w.onrender.com")
 
 # ---------------------------------------------------------------------------
 # 상태 정의 (백엔드AI 요청 메시지와 동일한 5단계 + 예외 2개)

@@ -1,4 +1,4 @@
-"""
+﻿"""
 seed_data.py
 Battery Triage Map 시연용 시드 데이터 삽입 스크립트.
 
@@ -20,7 +20,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-API_BASE_URL = "https://battery-triage-map-api.onrender.com"
+API_BASE_URL = "https://battery-triage-map-api-ve2w.onrender.com"
 
 # 발생채널별 시연용 좌표
 CHANNEL_COORDS = {
