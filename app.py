@@ -1375,6 +1375,67 @@ elif st.session_state.page == "intake":
                     unsafe_allow_html=True,
                 )
 
+            # 지도 표시 (매칭된 업체가 있고 좌표가 있을 때)
+            if matched_companies and any(c.get('latitude') and c.get('longitude') for c in matched_companies):
+                import folium
+                from streamlit_folium import st_folium
+
+                channel_name = st.session_state.get("channel_name", "강남폐차센터")
+                CHANNEL_COORDS = {
+                    "강남폐차센터": (37.4979, 127.0276),
+                    "수원폐차센터": (37.2636, 127.0286),
+                    "인천폐차센터": (37.4563, 126.7052),
+                }
+                origin_lat, origin_lon = CHANNEL_COORDS.get(channel_name, (37.5665, 126.9780))
+
+                all_lats = [origin_lat] + [c['latitude'] for c in matched_companies if c.get('latitude')]
+                all_lons = [origin_lon] + [c['longitude'] for c in matched_companies if c.get('longitude')]
+                center_lat = sum(all_lats) / len(all_lats)
+                center_lon = sum(all_lons) / len(all_lons)
+
+                m = folium.Map(location=[center_lat, center_lon], zoom_start=7, tiles="CartoDB positron")
+
+                # 발생 위치 마커 (파란색)
+                folium.Marker(
+                    location=[origin_lat, origin_lon],
+                    popup=folium.Popup(f"<b>📍 발생위치</b><br>{channel_name}", max_width=200),
+                    tooltip=channel_name,
+                    icon=folium.Icon(color="blue", icon="home", prefix="fa"),
+                ).add_to(m)
+
+                # 순위별 업체 마커 색상
+                rank_colors = {1: "red", 2: "orange", 3: "green"}
+
+                for company in matched_companies:
+                    if not company.get('latitude') or not company.get('longitude'):
+                        continue
+                    rank = company['rank']
+                    color = rank_colors.get(rank, "gray")
+                    folium.Marker(
+                        location=[company['latitude'], company['longitude']],
+                        popup=folium.Popup(
+                            f"<b>{rank}순위: {company['company_name']}</b><br>"
+                            f"거리: {company['distance_km']}km<br>"
+                            f"점수: {company['total_score']:.1f}<br>"
+                            f"처리유형: {company['process_type']}",
+                            max_width=220,
+                        ),
+                        tooltip=f"{rank}순위 {company['company_name']}",
+                        icon=folium.Icon(color=color, icon="industry", prefix="fa"),
+                    ).add_to(m)
+
+                    # 발생위치 → 업체 선 연결
+                    folium.PolyLine(
+                        locations=[[origin_lat, origin_lon], [company['latitude'], company['longitude']]],
+                        color=color,
+                        weight=2,
+                        opacity=0.5,
+                        dash_array="5",
+                    ).add_to(m)
+
+                st.markdown("**📍 처리업체 위치 지도**")
+                st_folium(m, width="100%", height=340, returned_objects=[])
+
         st.markdown("<br>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 1, 1.2], gap="small")
 
