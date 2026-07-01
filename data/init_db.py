@@ -54,12 +54,18 @@ def seed_companies(engine) -> int:
 
 
 def main():
-    engine = db_svc.get_engine()      # 테이블 자동 생성 포함
-    print(f"[init_db] 스키마 적용 완료 -> {engine.url}")
-    n = seed_companies(engine)
-    if n:
-        print(f"[init_db] companies 시드 {n}건 적재 완료")
-    print("[init_db] 생성된 테이블:", list(db_svc.metadata.tables.keys()))
+    # 주의: Render 빌드 단계에서는 내부 DB 호스트(dpg-...)가 아직 안 붙어서
+    #       접속이 실패할 수 있다. 그건 정상이며(테이블은 런타임 첫 요청 때 자동 생성),
+    #       빌드를 막지 않도록 예외를 삼킨다.
+    try:
+        engine = db_svc.get_engine()      # 테이블 자동 생성 포함
+        print(f"[init_db] 스키마 적용 완료 -> {engine.url}")
+        n = seed_companies(engine)
+        if n:
+            print(f"[init_db] companies 시드 {n}건 적재 완료")
+        print("[init_db] 생성된 테이블:", list(db_svc.metadata.tables.keys()))
+    except Exception as e:
+        print(f"[init_db] DB 연결 불가 -> 건너뜀(런타임에 자동 생성됨): {e}")
 
 
 if __name__ == "__main__":
