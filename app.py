@@ -1158,15 +1158,7 @@ elif st.session_state.page == "intake":
                 grade = triage_result.get("grade")
 
                 if grade == "Red":
-                    st.error("⚠️ 지정폐기물 판정 - 특별 처리 필요")
-                    st.session_state.triage_result = triage_result
-                    st.session_state.matching_result = {
-                        "status": "no_match",
-                        "matched_companies": [],
-                        "grade": grade,
-                    }
-                    st.session_state.step = "approval"
-                    st.rerun()
+                    st.warning("⚠️ 지정폐기물 판정 - 특별 처리 업체로 매칭합니다.")
 
                 triage_id = triage_result.get("triage_id")
 

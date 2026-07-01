@@ -182,26 +182,23 @@ def seed():
             grade = triage_result.get("grade")
             print(f"[{i:02d}] {case['vin']} → 등급: {grade} (triage_id: {triage_id})")
 
-            # 2) Red가 아니면 /match 호출
-            if grade != "Red":
-                mr = requests.post(
-                    f"{API_BASE_URL}/match",
-                    json={
-                        "triage_result": triage_result,
-                        "origin_latitude": lat,
-                        "origin_longitude": lon,
-                        "max_results": 3,
-                        "triage_id": triage_id,
-                    },
-                    timeout=30,
-                )
-                mr.raise_for_status()
-                match_result = mr.json()
-                companies = match_result.get("matched_companies", [])
-                rank1 = companies[0]["company_name"] if companies else "없음"
-                print(f"      매칭 완료 → 1순위: {rank1}")
-            else:
-                print(f"      Red(지정폐기물) → 매칭 생략")
+            # Red 포함 모든 등급에 대해 /match 호출 시도
+            mr = requests.post(
+                f"{API_BASE_URL}/match",
+                json={
+                    "triage_result": triage_result,
+                    "origin_latitude": lat,
+                    "origin_longitude": lon,
+                    "max_results": 3,
+                    "triage_id": triage_id,
+                },
+                timeout=30,
+            )
+            mr.raise_for_status()
+            match_result = mr.json()
+            companies = match_result.get("matched_companies", [])
+            rank1 = companies[0]["company_name"] if companies else "매칭 없음"
+            print(f"      매칭 완료 → 1순위: {rank1}")
 
             success += 1
 
