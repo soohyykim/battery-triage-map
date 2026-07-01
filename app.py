@@ -1392,7 +1392,9 @@ elif st.session_state.page == "intake":
                 st.rerun()
 
         with col2:
-            if st.button("❌ 반려", use_container_width=True):
+            if st.button("💾 저장", use_container_width=True):
+                # 현재 접수 건을 "승인 전" 상태로 저장하고 입력 화면으로 복귀
+                # (나중에 배터리 관리 페이지에서 승인 처리 가능)
                 st.session_state.step = "input"
                 st.session_state.intake_record = None
                 st.session_state.triage_result = None
