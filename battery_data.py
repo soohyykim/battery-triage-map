@@ -29,10 +29,10 @@ API_BASE_URL = os.environ.get("API_BASE_URL", "https://battery-triage-map-api.on
 # ---------------------------------------------------------------------------
 STATUS_PENDING_TRIAGE = "판정 전"
 STATUS_PENDING_APPROVAL = "승인 전"
-STATUS_REQUESTED = "요청"
-STATUS_PICKUP_SCHEDULED = "수거 신청"
+STATUS_REQUESTED = "승인 완료"
+STATUS_PICKUP_SCHEDULED = "수거 예정"
 STATUS_COMPLETED = "완료"
-STATUS_DESIGNATED_WASTE = "지정폐기물"
+STATUS_DESIGNATED_WASTE = "지정폐기물"  # Red 등급 판정 시 내부 처리용 (목록엔 등급으로 표시)
 
 ALL_STATUSES = [
     "전체",
@@ -41,7 +41,6 @@ ALL_STATUSES = [
     STATUS_REQUESTED,
     STATUS_PICKUP_SCHEDULED,
     STATUS_COMPLETED,
-    STATUS_DESIGNATED_WASTE,
 ]
 
 STATUS_COLOR = {
@@ -169,10 +168,10 @@ def batteries_to_table_rows(batteries):
     rows = []
     for b in batteries:
         rows.append({
-            "VIN": b["vin"],
-            "모델명": b["model_name"],
-            "제조사": b["battery_manufacturer"],
-            "용량(kWh)": b["capacity_kwh"],
+            "VIN": b["vin"] or "—",
+            "모델명": b["model_name"] or "—",
+            "제조사": b["battery_manufacturer"] or "—",
+            "용량(kWh)": b["capacity_kwh"] if b["capacity_kwh"] is not None else "—",
             "등급": b["grade"] or "미판정",
             "상태": b["status"],
             "추천업체": b["matched_company"] or "—",
