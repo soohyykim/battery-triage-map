@@ -775,8 +775,12 @@ if st.session_state.page == "battery_list":
 
     # --- 데이터 로드 ---
     channel_filter = DUMMY_USER["channel_name"]
-    counts = get_status_counts(channel_name=channel_filter)
-    batteries = fetch_batteries(channel_name=channel_filter)
+    try:
+        counts = get_status_counts(channel_name=channel_filter)
+        batteries = fetch_batteries(channel_name=channel_filter)
+    except Exception:
+        counts = {}
+        batteries = []
 
     import json as _json
     import streamlit.components.v1 as components
@@ -798,8 +802,8 @@ if st.session_state.page == "battery_list":
 <html>
 <head>
 <meta charset="utf-8"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
 <style>
 * {{ box-sizing: border-box; margin: 0; padding: 0; }}
 body {{ font-family: 'Malgun Gothic','Segoe UI',sans-serif; font-size: 13px; background: #f0f2f6; color: #1a2e44; }}
@@ -1234,8 +1238,8 @@ elif st.session_state.page == "company":
 
         _co_html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
 <style>
 * {{ box-sizing:border-box; margin:0; padding:0; }}
 body {{ font-family:'Malgun Gothic','Segoe UI',sans-serif; font-size:13px; background:#f0f2f6; }}

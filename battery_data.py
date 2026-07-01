@@ -109,9 +109,8 @@ def fetch_batteries(channel_name=None, status=None):
         res = requests.get(f"{API_BASE_URL}/history", params={"limit": 200}, timeout=10)
         res.raise_for_status()
         items = [_normalize_item(i) for i in res.json()]
-    except requests.RequestException as e:
-        st.error(f"배터리 목록을 불러오지 못했습니다: {e}")
-        return []
+    except requests.RequestException:
+        items = []
 
     if status and status != "전체":
         items = [b for b in items if b["status"] == status]
