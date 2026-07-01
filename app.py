@@ -19,6 +19,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import pandas as pd
+from pathlib import Path
 import requests
 
 from battery_data import (
@@ -141,19 +142,18 @@ st.markdown(
             justify-content: center;
             font-size: 16px;
         }
-        .triage-header-text-sub {
-            color: rgba(246,249,251,0.70);
-            font-size: 10px;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
         .triage-header-text-main {
             color: var(--c-primary-foreground);
-            font-size: 13px;
+            font-size: 16px;
             font-weight: 700;
             margin: 0;
+            line-height: 1.3;
+        }
+        .triage-header-text-sub {
+            color: rgba(246,249,251,0.60);
+            font-size: 11px;
+            margin: 2px 0 0 0;
+            line-height: 1.3;
         }
         .triage-channel-badge {
             background-color: rgba(0,181,181,0.15);
@@ -426,6 +426,12 @@ st.markdown(
             min-height: 30px !important;
         }
 
+        .sidebar-logo-desc {
+            font-size: 10px;
+            color: rgba(255,255,255,0.40);
+            margin-top: 2px;
+            font-weight: 400;
+        }
         .sidebar-group-label {
             font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
             color: rgba(255,255,255,0.35); text-transform: uppercase;
@@ -615,7 +621,7 @@ st.markdown(
 # 세션 상태 초기화
 # ---------------------------------------------------------------------------
 if "page" not in st.session_state:
-    st.session_state.page = "intake"  # "intake" | "battery_list"
+    st.session_state.page = "intake"  # "intake" | "battery_list" | "company"
 if "step" not in st.session_state:
     st.session_state.step = "input"
 if "intake_record" not in st.session_state:
@@ -639,45 +645,49 @@ if "show_detail_panel" not in st.session_state:
 # 사이드바 — 로고 / 메뉴 그룹 / 로그인 정보
 # ---------------------------------------------------------------------------
 with st.sidebar:
+    # ── 로고 + 플랫폼 설명 ───────────────────────────
     st.markdown(
         """
         <div class="sidebar-logo">
             <div class="sidebar-logo-box">🔋</div>
-            <div class="sidebar-logo-text">Battery Triage Map</div>
+            <div>
+                <div class="sidebar-logo-text">Battery Triage Map</div>
+                <div class="sidebar-logo-desc">사용후 배터리 판정 및 매칭 플랫폼</div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    is_intake = st.session_state.page == "intake"
-    is_list   = st.session_state.page == "battery_list"
+    st.markdown('<div class="sidebar-divider"></div>', unsafe_allow_html=True)
 
-    # ── 접수 관리 그룹 ──────────────────────────────
-    st.markdown(
-        '<div class="sidebar-group-label">접수 관리</div>',
-        unsafe_allow_html=True,
-    )
+    # ── 메뉴 4개 ────────────────────────────────────
+    menus = [
+        ("intake",       "배터리 등록"),
+        ("battery_list", "배터리 관리"),
+        ("company",      "처리 업체"),
+        ("settings",     "설정"),
+    ]
+    for page_key, label in menus:
+        if st.button(label, use_container_width=True, key=f"nav_{page_key}"):
+            st.session_state.page = page_key
+            if page_key == "intake":
+                st.session_state.step = "input"
+            st.rerun()
 
-    if st.button("배터리 등록", use_container_width=True, key="nav_intake"):
-        st.session_state.page = "intake"
-        st.session_state.step = "input"
-        st.rerun()
-
-    if st.button("배터리 관리", use_container_width=True, key="nav_list"):
-        st.session_state.page = "battery_list"
-        st.rerun()
-
-    # ── 채널 정보 + 설정 (흐리게) ───────────────────
+    # ── 로그인 정보 (맨 아래 고정) ──────────────────
+    user_initial = DUMMY_USER["name"][0]
     st.markdown(
         f"""
+        <div class="sidebar-bottom-spacer"></div>
         <div class="sidebar-divider"></div>
-        <div class="sidebar-group-label">채널 정보</div>
-        <div class="sidebar-info-row">{DUMMY_USER['channel_name']}</div>
-        <div class="sidebar-info-row">{DUMMY_USER['channel_type']}</div>
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-group-label">설정</div>
-        <div class="sidebar-menu-disabled">발생채널 설정</div>
-        <div class="sidebar-menu-disabled">통계 / 리포트</div>
+        <div class="sidebar-login-box">
+            <div class="sidebar-login-avatar">{user_initial}</div>
+            <div>
+                <p class="sidebar-login-name">{DUMMY_USER['name']} 님</p>
+                <p class="sidebar-login-sub">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</p>
+            </div>
+        </div>
         """,
         unsafe_allow_html=True,
     )
@@ -761,10 +771,9 @@ if st.session_state.page == "battery_list":
         f"""
         <div class="triage-header">
             <div class="triage-header-left">
-                <div class="triage-logo-box">📋</div>
                 <div>
-                    <p class="triage-header-text-sub">보유 배터리 현황</p>
                     <p class="triage-header-text-main">배터리 관리</p>
+                    <p class="triage-header-text-sub">보유 배터리 현황 조회 및 상태 관리</p>
                 </div>
             </div>
             <div class="triage-header-user">
@@ -1076,6 +1085,256 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
         show_battery_detail_dialog(st.session_state.selected_battery_id)
 
 
+elif st.session_state.page == "company":
+    # =======================================================================
+    # 처리 업체 페이지
+    # =======================================================================
+    import folium
+    from streamlit_folium import st_folium
+    import json as _json
+    import streamlit.components.v1 as components
+
+    st.markdown(
+        f"""
+        <div class="triage-header">
+            <div class="triage-header-left">
+                <div>
+                    <p class="triage-header-text-main">처리 업체</p>
+                    <p class="triage-header-text-sub">배터리 처리 가능 업체 현황 및 위치</p>
+                </div>
+            </div>
+            <div class="triage-header-user">
+                <span class="triage-header-user-name">{DUMMY_USER['name']} 님</span>
+                <span class="triage-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # 업체 데이터 로드
+    _company_csv = Path(__file__).parent / "data" / "companies_mock.csv"
+    _df_co = pd.read_csv(_company_csv) if _company_csv.exists() else pd.DataFrame()
+
+    # 처리 유형별 색상
+    PROCESS_COLOR = {
+        "reuse": "#2e9e5b",
+        "recycle": "#f3821d",
+        "designated_waste": "#e62d28",
+    }
+    PROCESS_LABEL = {
+        "reuse": "재사용",
+        "recycle": "재활용",
+        "designated_waste": "지정폐기물",
+    }
+
+    if not _df_co.empty:
+        # ── 요약 카드 ──────────────────────────────
+        _reuse_cnt    = len(_df_co[_df_co["process_type"] == "reuse"])
+        _recycle_cnt  = len(_df_co[_df_co["process_type"] == "recycle"])
+        _waste_cnt    = len(_df_co[_df_co["process_type"] == "designated_waste"])
+
+        st.markdown(
+            f"""
+            <div style="display:flex; gap:10px; margin-bottom:12px;">
+                <div class="summary-inner-box" style="flex:1; border-left:4px solid #2e9e5b;">
+                    <div class="summary-inner-label">재사용 업체</div>
+                    <div class="summary-inner-count" style="color:#2e9e5b;">{_reuse_cnt}</div>
+                </div>
+                <div class="summary-inner-box" style="flex:1; border-left:4px solid #f3821d;">
+                    <div class="summary-inner-label">재활용 업체</div>
+                    <div class="summary-inner-count" style="color:#f3821d;">{_recycle_cnt}</div>
+                </div>
+                <div class="summary-inner-box" style="flex:1; border-left:4px solid #e62d28;">
+                    <div class="summary-inner-label">지정폐기물 업체</div>
+                    <div class="summary-inner-count" style="color:#e62d28;">{_waste_cnt}</div>
+                </div>
+                <div class="summary-inner-box" style="flex:1; border-left:4px solid #142f4b;">
+                    <div class="summary-inner-label">전체 업체</div>
+                    <div class="summary-inner-count">{len(_df_co)}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        # ── 지도 ────────────────────────────────────
+        st.markdown("**처리 업체 위치 지도**")
+
+        _center_lat = _df_co["latitude"].mean()
+        _center_lon = _df_co["longitude"].mean()
+        _m = folium.Map(
+            location=[_center_lat, _center_lon],
+            zoom_start=7,
+            tiles="CartoDB positron",
+        )
+
+        for _, row in _df_co.iterrows():
+            if pd.isna(row["latitude"]) or pd.isna(row["longitude"]):
+                continue
+            _color = {"reuse": "green", "recycle": "orange", "designated_waste": "red"}.get(row["process_type"], "gray")
+            folium.CircleMarker(
+                location=[row["latitude"], row["longitude"]],
+                radius=8,
+                color=_color,
+                fill=True,
+                fill_color=_color,
+                fill_opacity=0.8,
+                popup=folium.Popup(
+                    f"""<b>{row['company_name']}</b><br>
+                    유형: {PROCESS_LABEL.get(row['process_type'], row['process_type'])}<br>
+                    지역: {row['region']}<br>
+                    월 처리: {int(row['monthly_capacity_count'])}건<br>
+                    주소: {row['address']}""",
+                    max_width=260,
+                ),
+                tooltip=row["company_name"],
+            ).add_to(_m)
+
+        # 범례
+        _legend = """
+        <div style="position:fixed; bottom:20px; left:20px; background:white;
+             padding:10px 14px; border-radius:8px; border:1px solid #e5e7eb;
+             font-size:12px; z-index:999; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+            <div style="font-weight:700; margin-bottom:6px; color:#1a2e44;">처리 유형</div>
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                <div style="width:12px;height:12px;border-radius:50%;background:#2e9e5b;"></div> 재사용
+            </div>
+            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                <div style="width:12px;height:12px;border-radius:50%;background:#f3821d;"></div> 재활용
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+                <div style="width:12px;height:12px;border-radius:50%;background:#e62d28;"></div> 지정폐기물
+            </div>
+        </div>
+        """
+        _m.get_root().html.add_child(folium.Element(_legend))
+        st_folium(_m, width="100%", height=420, returned_objects=[])
+
+        # ── 업체 리스트 (React) ──────────────────────
+        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+        st.markdown("**처리 업체 목록**")
+
+        _co_rows = []
+        for _, row in _df_co.iterrows():
+            _co_rows.append({
+                "company_name": row["company_name"],
+                "region": row["region"],
+                "process_type": PROCESS_LABEL.get(row["process_type"], row["process_type"]),
+                "accepted_grade": row["accepted_grade"],
+                "monthly_capacity_count": int(row["monthly_capacity_count"]),
+                "address": row["address"],
+            })
+
+        PROCESS_COLOR_JS = _json.dumps({"재사용": "#2e9e5b", "재활용": "#f3821d", "지정폐기물": "#e62d28"})
+        CO_ROWS_JS = _json.dumps(_co_rows)
+
+        _co_html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<style>
+* {{ box-sizing:border-box; margin:0; padding:0; }}
+body {{ font-family:'Malgun Gothic','Segoe UI',sans-serif; font-size:13px; background:#f0f2f6; }}
+.wrap {{ background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }}
+.filter-bar {{ display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid #f1f5f9; }}
+.filter-bar input, .filter-bar select {{
+    height:30px; border:1px solid #d1d5db; border-radius:6px;
+    padding:0 8px; font-size:12px; background:#f9fafb; outline:none;
+}}
+.filter-bar input {{ width:180px; }}
+.filter-bar select {{ width:110px; }}
+.info {{ font-size:12px; color:#6b7280; margin-right:auto; }}
+table {{ width:100%; border-collapse:collapse; }}
+thead tr {{ background:#f8fafc; }}
+th {{ padding:9px 10px; text-align:left; font-size:11px; font-weight:700; color:#6b7280; border-bottom:2px solid #e5e7eb; white-space:nowrap; }}
+tbody tr {{ border-bottom:1px solid #f1f5f9; transition:background 0.1s; cursor:default; }}
+tbody tr:hover {{ background:#f8fafc; }}
+td {{ padding:9px 10px; font-size:12px; color:#374151; }}
+.badge {{ display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:700; color:#fff; }}
+.empty {{ padding:32px; text-align:center; color:#9ca3af; }}
+</style></head><body>
+<div id="root"></div>
+<script>
+const {{ useState, useMemo }} = React;
+const PROCESS_COLOR = {PROCESS_COLOR_JS};
+const ALL_ROWS = {CO_ROWS_JS};
+
+function App() {{
+    const [q, setQ] = useState("");
+    const [pt, setPt] = useState("전체");
+
+    const filtered = useMemo(() => ALL_ROWS.filter(r => {{
+        const qOk = !q || r.company_name.includes(q) || r.region.includes(q) || r.address.includes(q);
+        const ptOk = pt === "전체" || r.process_type === pt;
+        return qOk && ptOk;
+    }}), [q, pt]);
+
+    return React.createElement("div", {{className:"wrap"}},
+        React.createElement("div", {{className:"filter-bar"}},
+            React.createElement("span", {{className:"info"}}, `전체 ${{filtered.length}}개 업체`),
+            React.createElement("input", {{type:"text", placeholder:"업체명·지역·주소 검색", value:q, onChange:e=>setQ(e.target.value)}}),
+            React.createElement("select", {{value:pt, onChange:e=>setPt(e.target.value)}},
+                ["전체","재사용","재활용","지정폐기물"].map(v => React.createElement("option",{{key:v,value:v}},v))
+            ),
+        ),
+        filtered.length === 0
+            ? React.createElement("div",{{className:"empty"}},"검색 결과가 없습니다.")
+            : React.createElement("table", null,
+                React.createElement("thead", null,
+                    React.createElement("tr", null,
+                        ["업체명","지역","처리 유형","허용 등급","월 처리 용량","주소"].map(h =>
+                            React.createElement("th",{{key:h}},h)
+                        )
+                    )
+                ),
+                React.createElement("tbody", null,
+                    filtered.map((row,i) =>
+                        React.createElement("tr", {{key:i}},
+                            React.createElement("td", null, React.createElement("b",null,row.company_name)),
+                            React.createElement("td", null, row.region),
+                            React.createElement("td", null,
+                                React.createElement("span",{{className:"badge", style:{{backgroundColor:PROCESS_COLOR[row.process_type]||"#9aa5b1"}}}}, row.process_type)
+                            ),
+                            React.createElement("td", null, row.accepted_grade),
+                            React.createElement("td", null, `${{row.monthly_capacity_count}}건/월`),
+                            React.createElement("td", null, React.createElement("span",{{style:{{color:"#6b7280",fontSize:"11px"}}}},row.address)),
+                        )
+                    )
+                )
+            )
+    );
+}}
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script></body></html>"""
+
+        components.html(_co_html, height=min(120 + len(_co_rows) * 38, 700), scrolling=False)
+
+    else:
+        st.warning("처리 업체 데이터를 불러오지 못했습니다. data/company_master_v3.csv를 확인해주세요.")
+
+
+elif st.session_state.page == "settings":
+    st.markdown(
+        f"""
+        <div class="triage-header">
+            <div class="triage-header-left">
+                <div>
+                    <p class="triage-header-text-main">설정</p>
+                    <p class="triage-header-text-sub">발생채널 및 시스템 설정</p>
+                </div>
+            </div>
+            <div class="triage-header-user">
+                <span class="triage-header-user-name">{DUMMY_USER['name']} 님</span>
+                <span class="triage-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.info("설정 기능은 추후 구현 예정입니다.")
+
+
 elif st.session_state.page == "intake":
     # =======================================================================
     # STEP 1: 입력 UI
@@ -1085,10 +1344,9 @@ elif st.session_state.page == "intake":
             f"""
             <div class="triage-header">
                 <div class="triage-header-left">
-                    <div class="triage-logo-box">🔋</div>
                     <div>
-                        <p class="triage-header-text-sub">{st.session_state.channel_name}</p>
                         <p class="triage-header-text-main">배터리 등록</p>
+                        <p class="triage-header-text-sub">사용후 배터리 접수 및 자동 판정</p>
                     </div>
                 </div>
                 <div class="triage-header-user">
