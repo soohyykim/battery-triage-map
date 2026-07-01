@@ -21,3 +21,4 @@ pymupdf==1.24.11
 openai==1.51.0
 pymupdf==1.24.11
 openai==1.51.0
+Add-Content -Path requirements.txt -Value "google-generativeai>=0.8.0"

@@ -28,8 +28,51 @@ CHROMA_DIR = Path(os.getenv("CHROMA_DIR", BASE_DIR / "data" / "chroma"))
 COLLECTION_NAME = "btm_policy"
 LLM_MODEL = os.getenv("LLM_MODEL", "gpt-4o-mini")
 
+# Gemini (무료) — 서버 메모리 절약용 원격 임베딩 + 리포트 생성
+#   GEMINI_API_KEY 가 있으면: 임베딩/생성을 Gemini로 (로컬 모델 미사용 → 메모리 가벼움, 배포용)
+#   없으면: ChromaDB 기본 로컬 임베딩 (로컬 개발용)
+GEMINI_EMBED_MODEL = os.getenv("GEMINI_EMBED_MODEL", "models/gemini-embedding-001")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
 # 조문 단위 청크가 너무 길면 잘라줄 상한
 MAX_CHARS = 1200
+
+
+def _gemini_key() -> str | None:
+    return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+
+def _embed_texts(texts: List[str]) -> List[List[float]] | None:
+    """
+    Gemini 로 텍스트들을 임베딩한다. 키가 없으면 None 을 반환해
+    호출부가 ChromaDB 기본(로컬) 임베딩으로 동작하게 한다.
+    """
+    key = _gemini_key()
+    if not key:
+        return None
+    import time
+    import google.generativeai as genai
+
+    genai.configure(api_key=key)
+    vectors: List[List[float]] = []
+    for i in range(0, len(texts), 20):            # 20개씩 배치
+        batch = texts[i:i + 20]
+        for attempt in range(6):                  # 429 면 대기 후 재시도
+            try:
+                resp = genai.embed_content(model=GEMINI_EMBED_MODEL, content=batch)
+                emb = resp["embedding"]
+                if emb and not isinstance(emb[0], list):  # 단일 입력 방어
+                    emb = [emb]
+                vectors.extend(emb)
+                break
+            except Exception as e:
+                if "429" in str(e) and attempt < 5:
+                    print("[rag] 임베딩 rate limit -> 25초 대기 후 재시도")
+                    time.sleep(25)
+                    continue
+                raise
+        time.sleep(1)                             # 배치 간 간격(분당 한도 여유)
+    return vectors
 
 DISCLAIMER = (
     "본 결과는 입력값 기반 예비 추정이며, 법적 지위(순환자원/폐기물)와 "
@@ -111,9 +154,14 @@ def split_by_article(text: str) -> List[dict]:
 def get_chroma_client():
     """영속(PersistentClient) ChromaDB 클라이언트 반환."""
     import chromadb
+    from chromadb.config import Settings
 
     CHROMA_DIR.mkdir(parents=True, exist_ok=True)
-    return chromadb.PersistentClient(path=str(CHROMA_DIR))
+    # 텔레메트리 끔(로그 노이즈 + 약간의 메모리 절약)
+    return chromadb.PersistentClient(
+        path=str(CHROMA_DIR),
+        settings=Settings(anonymized_telemetry=False),
+    )
 
 
 def get_collection():
@@ -131,6 +179,26 @@ def get_collection():
 # ---------------------------------------------------------------------------
 # 4. 임베딩 인덱스 구축
 # ---------------------------------------------------------------------------
+def _merge_chunks(chunks: List[dict], max_chars: int = 2000) -> List[dict]:
+    """
+    잘게 쪼개진 조문 청크들을 max_chars 까지 합쳐 청크 수를 줄인다.
+    (무료 임베딩 분당 한도(100건)와 호출 비용을 줄이려는 목적. 검색 품질엔 큰 지장 없음)
+    """
+    merged: List[dict] = []
+    buf_text, buf_article = "", ""
+    for c in chunks:
+        piece = c["content"]
+        if buf_text and len(buf_text) + len(piece) > max_chars:
+            merged.append({"article": buf_article, "content": buf_text.strip()})
+            buf_text, buf_article = "", ""
+        if not buf_article and c.get("article"):
+            buf_article = c["article"]
+        buf_text += ("\n" + piece) if buf_text else piece
+    if buf_text.strip():
+        merged.append({"article": buf_article, "content": buf_text.strip()})
+    return merged
+
+
 def build_index(reset: bool = True) -> int:
     """정책 PDF -> 조문 청크 -> ChromaDB 적재. 적재 청크 수 반환."""
     client = get_chroma_client()
@@ -146,13 +214,19 @@ def build_index(reset: bool = True) -> int:
     total = 0
     for doc in load_policy_texts():
         source = doc["source"]
-        chunks = split_by_article(doc["text"])
+        chunks = _merge_chunks(split_by_article(doc["text"]))
         if not chunks:
             continue
         ids = [f"{source}::{i}" for i in range(len(chunks))]
         documents = [c["content"] for c in chunks]
         metadatas = [{"source": source, "article": c["article"]} for c in chunks]
-        collection.add(ids=ids, documents=documents, metadatas=metadatas)
+        # 키 있으면 Gemini 임베딩을 직접 넣고(로컬 모델 미로딩), 없으면 기본 로컬 임베딩
+        embeddings = _embed_texts(documents)
+        if embeddings is not None:
+            collection.add(ids=ids, documents=documents,
+                           metadatas=metadatas, embeddings=embeddings)
+        else:
+            collection.add(ids=ids, documents=documents, metadatas=metadatas)
         total += len(chunks)
         print(f"[rag] {source} -> {len(chunks)} chunks 적재")
     print(f"[rag] 완료. 총 {total} chunks (collection={COLLECTION_NAME})")
@@ -177,7 +251,12 @@ def search_policies(query: str, n_results: int = 4) -> List[dict]:
             return []
         if collection.count() == 0:
             return []
-    res = collection.query(query_texts=[query], n_results=n_results)
+    # 키 있으면 질의도 Gemini로 임베딩(인덱스와 동일 방식), 없으면 기본 로컬 임베딩
+    qvec = _embed_texts([query])
+    if qvec is not None:
+        res = collection.query(query_embeddings=qvec, n_results=n_results)
+    else:
+        res = collection.query(query_texts=[query], n_results=n_results)
     out: List[dict] = []
     docs = res.get("documents", [[]])[0]
     metas = res.get("metadatas", [[]])[0]
@@ -210,6 +289,37 @@ def _build_query(triage_result: dict, question: str | None) -> str:
     path = triage_result.get("recommended_path", "")
     chem = triage_result.get("input_summary", {}).get("chemistry", "")
     return f"{chem} 배터리 {_PATH_KO.get(path, path)} 처리 절차 분리 보관 반납 기준 {grade}"
+
+
+def _compose_with_gemini(triage_result: dict, contexts: List[dict], question: str | None) -> str | None:
+    """GEMINI_API_KEY 가 있으면 Gemini 로 리포트를 합성한다. 없으면 None."""
+    key = _gemini_key()
+    if not key:
+        return None
+    try:
+        import google.generativeai as genai
+
+        genai.configure(api_key=key)
+        ctx = "\n\n".join(
+            f"[{c['source']} {c['article']}]\n{c['content']}" for c in contexts
+        )
+        grade = triage_result.get("grade", "")
+        path = _PATH_KO.get(triage_result.get("recommended_path", ""), "")
+        prompt = (
+            "너는 전기차 사용후 배터리 처리 정책 안내 도우미다. "
+            "아래 정책 조문만 근거로, '판정 근거 / 관련 법령 / 주의사항' 형식으로 "
+            "간결한 한국어로 답하라. 조문에 없는 내용은 지어내지 마라.\n\n"
+            f"[배터리 예비판정] 등급={grade}, 처리방향={path}\n"
+            f"[질문] {question or '이 배터리의 처리 절차와 법적 근거를 알려줘'}\n\n"
+            f"[정책 조문]\n{ctx}"
+        )
+        model = genai.GenerativeModel(GEMINI_MODEL)
+        resp = model.generate_content(prompt)
+        text = (resp.text or "").strip()
+        return text or None
+    except Exception as e:
+        print(f"[rag] Gemini 생성 실패, 다음 단계로 대체: {e}")
+        return None
 
 
 def _compose_with_llm(triage_result: dict, contexts: List[dict], question: str | None) -> str | None:
@@ -286,7 +396,10 @@ def generate_report(payload: dict) -> dict:
     query = _build_query(triage_result, question)
     contexts = search_policies(query, n_results=4)
 
-    report = _compose_with_llm(triage_result, contexts, question)
+    # 우선순위: Gemini(무료) -> OpenAI -> 템플릿(키 없이 발췌형)
+    report = _compose_with_gemini(triage_result, contexts, question)
+    if report is None:
+        report = _compose_with_llm(triage_result, contexts, question)
     if report is None:
         report = _compose_template(triage_result, contexts)
 
