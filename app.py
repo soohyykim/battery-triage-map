@@ -42,7 +42,7 @@ from battery_data import (
 # ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="사용후 배터리 접수 | EV Battery Intake",
-    page_icon=None,
+    page_icon="🔋",
     layout="wide",
 )
 
@@ -419,17 +419,11 @@ st.markdown(
             min-height: calc(100vh - 32px);
         }
 
-        /* 외관 상태 점검 pills 크기 조정 — 너비에 맞게 균등 배분 */
-        div[data-testid="stPills"] {
-            display: flex !important;
-            gap: 8px !important;
-        }
+        /* 외관 상태 점검 pills 크기 조정 */
         div[data-testid="stPills"] button {
-            flex: 1 !important;
-            padding: 6px 8px !important;
-            font-size: 13px !important;
-            min-height: 34px !important;
-            justify-content: center !important;
+            padding: 4px 12px !important;
+            font-size: 12px !important;
+            min-height: 30px !important;
         }
 
         .sidebar-logo-desc {
@@ -456,18 +450,11 @@ st.markdown(
             opacity: 0.35; font-size: 13px; font-weight: 600; color: #fff;
             cursor: not-allowed;
         }
-        section[data-testid="stSidebar"] > div:first-child {
-            padding-top: 0 !important;
-        }
-        section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
-            padding-top: 0 !important;
-        }
         .sidebar-logo {
             display: flex;
-            align-items: flex-start;
-            flex-direction: column;
-            gap: 4px;
-            padding: 1rem 4px 16px 4px;
+            align-items: center;
+            gap: 10px;
+            padding: 4px 4px 16px 4px;
             border-bottom: 1px solid rgba(255,255,255,0.15) !important;
             margin-bottom: 14px;
         }
@@ -483,10 +470,9 @@ st.markdown(
             font-size: 16px;
         }
         .sidebar-logo-text {
-            font-size: 22px;
-            font-weight: 800;
+            font-size: 13px;
+            font-weight: 700;
             color: #ffffff !important;
-            line-height: 1.2;
         }
 
         .sidebar-login-box {
@@ -663,8 +649,11 @@ with st.sidebar:
     st.markdown(
         """
         <div class="sidebar-logo">
-            <div class="sidebar-logo-text">Battery Triage Map</div>
-            <div class="sidebar-logo-desc">사용후 배터리 판정 및 매칭 플랫폼</div>
+            <div class="sidebar-logo-box">🔋</div>
+            <div>
+                <div class="sidebar-logo-text">Battery Triage Map</div>
+                <div class="sidebar-logo-desc">사용후 배터리 판정 및 매칭 플랫폼</div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -685,6 +674,23 @@ with st.sidebar:
             if page_key == "intake":
                 st.session_state.step = "input"
             st.rerun()
+
+    # ── 로그인 정보 (맨 아래 고정) ──────────────────
+    user_initial = DUMMY_USER["name"][0]
+    st.markdown(
+        f"""
+        <div class="sidebar-bottom-spacer"></div>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-login-box">
+            <div class="sidebar-login-avatar">{user_initial}</div>
+            <div>
+                <p class="sidebar-login-name">{DUMMY_USER['name']} 님</p>
+                <p class="sidebar-login-sub">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</p>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     user_initial = DUMMY_USER["name"][0]
 
 
@@ -722,7 +728,7 @@ def show_battery_detail_dialog(battery_id):
         st.error("배터리 정보를 찾을 수 없습니다.")
         return
 
-    st.markdown(f"**{detail['vin']}**")
+    st.markdown(f"**🔍 {detail['vin']}**")
 
     d1, d2, d3 = st.columns(3)
     with d1:
@@ -742,7 +748,7 @@ def show_battery_detail_dialog(battery_id):
 
     col_s1, col_s2 = st.columns(2)
     with col_s1:
-        if st.button("상태 변경 적용", use_container_width=True, type="primary"):
+        if st.button("✅ 상태 변경 적용", use_container_width=True, type="primary"):
             update_battery_status(detail["id"], new_status)
             st.success(f"상태가 '{new_status}'(으)로 변경되었습니다.")
             st.session_state.show_detail_panel = False
@@ -781,19 +787,14 @@ if st.session_state.page == "battery_list":
 
     # --- 데이터 로드 ---
     channel_filter = DUMMY_USER["channel_name"]
-    try:
-        counts = get_status_counts(channel_name=channel_filter)
-        batteries = fetch_batteries(channel_name=channel_filter)
-    except Exception:
-        counts = {}
-        batteries = []
+    counts = get_status_counts(channel_name=channel_filter)
+    batteries = fetch_batteries(channel_name=channel_filter)
 
     import json as _json
     import streamlit.components.v1 as components
 
     ROWS_JS         = _json.dumps(batteries_to_table_rows(batteries) if batteries else [])
     COUNTS_JS       = _json.dumps({s: counts.get(s, 0) for s in ALL_STATUSES[1:]})
-    BULK_STATUS_JS  = _json.dumps(["승인 전","승인 완료","수거 예정","완료"])
     STATUS_OPTIONS_JS = _json.dumps(ALL_STATUSES)
     GRADE_OPTIONS_JS  = _json.dumps(["전체", "Green", "Yellow", "Orange", "Gray", "Red", "미판정"])
     STATUS_COLOR_JS = _json.dumps({
@@ -809,237 +810,274 @@ if st.session_state.page == "battery_list":
 <html>
 <head>
 <meta charset="utf-8"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <style>
-* {{ box-sizing:border-box; margin:0; padding:0; }}
-body {{ font-family:'Malgun Gothic','Segoe UI',sans-serif; font-size:13px; background:#f0f2f6; color:#1a2e44; }}
+* {{ box-sizing: border-box; margin: 0; padding: 0; }}
+body {{ font-family: 'Malgun Gothic','Segoe UI',sans-serif; font-size: 13px; background: #f0f2f6; color: #1a2e44; }}
 
+/* ── 필터 바 ── */
 .filter-bar {{
-  background:#fff; border:1px solid #e2e8f0; border-radius:10px;
-  padding:10px 14px; display:flex; align-items:center; gap:8px;
-  margin-bottom:10px; flex-wrap:wrap;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  padding: 12px 14px; display: flex; align-items: center; gap: 8px;
+  margin-bottom: 10px; flex-wrap: wrap;
 }}
-.filter-bar label {{ font-size:11px; color:#6b7280; font-weight:600; white-space:nowrap; }}
+.filter-bar label {{ font-size: 11px; color: #6b7280; font-weight: 600; white-space: nowrap; }}
 .filter-bar input, .filter-bar select {{
-  height:30px; border:1px solid #d1d5db; border-radius:6px;
-  padding:0 8px; font-size:12px; color:#374151; background:#f9fafb; outline:none;
+  height: 32px; border: 1px solid #d1d5db; border-radius: 6px;
+  padding: 0 8px; font-size: 12px; color: #374151; background: #f9fafb;
+  outline: none;
 }}
-.filter-bar input {{ width:200px; }}
-.filter-bar select {{ width:110px; }}
-.sep {{ width:1px; height:22px; background:#e5e7eb; margin:0 2px; }}
-
-.summary-row {{ display:flex; gap:8px; margin-bottom:10px; }}
-.s-card {{
-  flex:1; background:#fff; border:1px solid #e2e8f0; border-radius:8px;
-  padding:10px 8px; text-align:center;
+.filter-bar input:focus, .filter-bar select:focus {{
+  border-color: #00838a; background: #fff;
 }}
-.s-label {{ font-size:11px; color:#6b7280; font-weight:600; margin-bottom:4px; }}
-.s-count {{ font-size:20px; font-weight:800; color:#1a2e44; }}
+.filter-bar input {{ width: 200px; }}
+.filter-bar select {{ width: 110px; }}
+.filter-sep {{ width: 1px; height: 24px; background: #e5e7eb; margin: 0 4px; }}
+.btn {{ height: 32px; padding: 0 14px; border-radius: 6px; border: none;
+  font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }}
+.btn-primary {{ background: #1a2e44; color: #fff; }}
+.btn-primary:hover {{ background: #142438; }}
+.btn-outline {{ background: #fff; color: #374151; border: 1px solid #d1d5db; }}
+.btn-outline:hover {{ background: #f3f4f6; }}
+.btn-teal {{ background: #00838a; color: #fff; }}
+.btn-teal:hover:not(:disabled) {{ background: #006b71; }}
+.btn:disabled {{ opacity: 0.4; cursor: not-allowed; }}
 
-.table-wrap {{ background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }}
-.toolbar {{
-  display:flex; align-items:center; gap:8px;
-  padding:10px 14px; border-bottom:1px solid #f1f5f9;
+/* ── 상태 요약 카드 ── */
+.summary-row {{
+  display: flex; gap: 8px; margin-bottom: 10px;
 }}
-.info {{ font-size:12px; color:#6b7280; margin-right:auto; }}
-.btn {{ height:30px; padding:0 12px; border-radius:6px; border:none;
-  font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }}
-.btn:disabled {{ opacity:0.4; cursor:not-allowed; }}
-.btn-teal {{ background:#00838a; color:#fff; }}
-.btn-teal:hover:not(:disabled) {{ background:#006b71; }}
-.btn-outline {{ background:#fff; color:#374151; border:1px solid #d1d5db; }}
-.btn-outline:hover:not(:disabled) {{ background:#f3f4f6; }}
-.st-sel {{ height:30px; border:1px solid #d1d5db; border-radius:6px;
-  padding:0 8px; font-size:12px; background:#f9fafb; outline:none; }}
+.summary-card {{
+  flex: 1; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+  padding: 10px 8px; text-align: center;
+}}
+.summary-card .s-label {{ font-size: 11px; color: #6b7280; font-weight: 600; margin-bottom: 4px; }}
+.summary-card .s-count {{ font-size: 20px; font-weight: 800; color: #1a2e44; }}
 
-table {{ width:100%; border-collapse:collapse; }}
-thead tr {{ background:#f8fafc; }}
-th {{ padding:9px 10px; text-align:left; font-size:11px; font-weight:700;
-  color:#6b7280; border-bottom:2px solid #e5e7eb; white-space:nowrap; }}
-th:first-child {{ width:36px; text-align:center; }}
-tbody tr {{ border-bottom:1px solid #f1f5f9; cursor:pointer; transition:background 0.1s; }}
-tbody tr:hover {{ background:#f8fafc; }}
-tbody tr.sel {{ background:#e8f6f7; }}
-td {{ padding:9px 10px; font-size:12px; color:#374151; }}
-td:first-child {{ text-align:center; }}
-.badge {{ display:inline-block; padding:2px 10px; border-radius:999px;
-  font-size:11px; font-weight:700; color:#fff; white-space:nowrap; }}
-.feedback {{ margin:6px 14px; padding:7px 12px; border-radius:6px;
-  font-size:12px; font-weight:600; background:#d1fae5; color:#065f46; }}
-.empty {{ padding:40px; text-align:center; color:#9ca3af; }}
-input[type=checkbox] {{ width:14px; height:14px; cursor:pointer; accent-color:#00838a; }}
+/* ── 테이블 컨테이너 ── */
+.table-wrap {{
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  overflow: hidden;
+}}
+.table-toolbar {{
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-bottom: 1px solid #f1f5f9;
+}}
+.table-toolbar .info {{ font-size: 12px; color: #6b7280; margin-right: auto; }}
+.status-select {{
+  height: 30px; border: 1px solid #d1d5db; border-radius: 6px;
+  padding: 0 8px; font-size: 12px; background: #f9fafb; outline: none;
+}}
+table {{ width: 100%; border-collapse: collapse; }}
+thead tr {{ background: #f8fafc; }}
+th {{
+  padding: 9px 10px; text-align: left; font-size: 11px;
+  font-weight: 700; color: #6b7280; border-bottom: 2px solid #e5e7eb;
+  white-space: nowrap;
+}}
+th:first-child {{ width: 36px; text-align: center; }}
+tbody tr {{ border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: background 0.1s; }}
+tbody tr:hover {{ background: #f8fafc; }}
+tbody tr.selected {{ background: #e8f6f7; }}
+td {{ padding: 9px 10px; font-size: 12px; color: #374151; }}
+td:first-child {{ text-align: center; }}
+.badge {{
+  display: inline-block; padding: 2px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap;
+}}
+input[type=checkbox] {{ width: 14px; height: 14px; cursor: pointer; accent-color: #00838a; }}
+.feedback {{
+  margin: 8px 14px; padding: 8px 12px; border-radius: 6px;
+  font-size: 12px; font-weight: 600;
+}}
+.fb-ok {{ background: #d1fae5; color: #065f46; }}
+.empty {{ padding: 32px; text-align: center; color: #9ca3af; font-size: 13px; }}
 </style>
 </head>
 <body>
-<!-- 필터 바 -->
-<div class="filter-bar">
-  <label>VIN / 모델명</label>
-  <input id="q" type="text" placeholder="검색어 입력"/>
-  <div class="sep"></div>
-  <label>등급</label>
-  <select id="gf"><option>전체</option><option>Green</option><option>Yellow</option><option>Orange</option><option>Gray</option><option>Red</option><option>미판정</option></select>
-  <label>상태</label>
-  <select id="sf"></select>
-  <div class="sep"></div>
-  <button class="btn btn-outline" id="reset-btn">초기화</button>
-</div>
-<!-- 상태 요약 카드 -->
-<div class="summary-row" id="summary"></div>
-<!-- 테이블 -->
-<div class="table-wrap">
-  <div class="toolbar">
-    <span class="info" id="info"></span>
-    <select class="st-sel" id="bulk-sel"></select>
-    <button class="btn btn-teal" id="bulk-btn" disabled>일괄 변경</button>
-    <button class="btn btn-outline" id="csv-btn">CSV 다운로드</button>
-  </div>
-  <div class="feedback" id="fb" style="display:none"></div>
-  <table>
-    <thead><tr>
-      <th><input type="checkbox" id="chk-all"/></th>
-      <th>VIN</th><th>모델명</th><th>제조사</th><th>용량(kWh)</th>
-      <th>등급</th><th>상태</th><th>추천업체</th><th>등록 일자</th>
-    </tr></thead>
-    <tbody id="tbody"></tbody>
-  </table>
-</div>
+<div id="root"></div>
 <script>
-const SC = {STATUS_COLOR_JS};
-const GC = {GRADE_COLOR_JS};
-const SO = {STATUS_OPTIONS_JS};
-const BS = {BULK_STATUS_JS};
-const COUNTS = {COUNTS_JS};
-let allRows = {ROWS_JS};
-let filtered = [...allRows];
-let checked = new Set();
-let bulkStatus = "승인 완료";
-let feedbackTimer = null;
+const {{ useState, useMemo }} = React;
 
-function badge(val, colorMap) {{
-  const c = colorMap[val] || "#9aa5b1";
-  return `<span class="badge" style="background:${{c}}">${{val}}</span>`;
+const STATUS_COLOR   = {STATUS_COLOR_JS};
+const GRADE_COLOR    = {GRADE_COLOR_JS};
+const STATUS_OPTIONS = {STATUS_OPTIONS_JS};
+const GRADE_OPTIONS  = {GRADE_OPTIONS_JS};
+const ALL_ROWS       = {ROWS_JS};
+const COUNTS         = {COUNTS_JS};
+const BULK_STATUSES  = ["승인 전","승인 완료","수거 예정","완료"];
+
+function Badge({{ value, map }}) {{
+  return React.createElement("span",{{
+    className:"badge", style:{{ backgroundColor: map[value]||"#9aa5b1" }}
+  }}, value);
 }}
 
-function applyFilter() {{
-  const q = document.getElementById("q").value.toLowerCase();
-  const g = document.getElementById("gf").value;
-  const s = document.getElementById("sf").value;
-  filtered = allRows.filter(r => {{
-    const qOk = !q || (r.VIN||"").toLowerCase().includes(q) || (r["모델명"]||"").toLowerCase().includes(q);
-    const gOk = g === "전체" || r["등급"] === g;
-    const sOk = s === "전체" || r["상태"] === s;
-    return qOk && gOk && sOk;
-  }});
-  checked = new Set();
-  render();
-}}
+function App() {{
+  const [vinQ, setVinQ]           = useState("");
+  const [gradeQ, setGradeQ]       = useState("전체");
+  const [statusQ, setStatusQ]     = useState("전체");
+  const [rows, setRows]           = useState(ALL_ROWS);
+  const [counts, setCounts]       = useState(COUNTS);
+  const [checked, setChecked]     = useState(new Set());
+  const [bulkStatus, setBulk]     = useState("승인 완료");
+  const [feedback, setFeedback]   = useState(null);
 
-function toggleAll(e) {{
-  if (e.target.checked) filtered.forEach(r => checked.add(r._id));
-  else checked.clear();
-  render();
-}}
+  const filtered = useMemo(() => {{
+    return rows.filter(r => {{
+      const vinOk    = !vinQ || (r.VIN||"").toLowerCase().includes(vinQ.toLowerCase()) || (r["모델명"]||"").toLowerCase().includes(vinQ.toLowerCase());
+      const gradeOk  = gradeQ === "전체" || r["등급"] === gradeQ;
+      const statusOk = statusQ === "전체" || r["상태"] === statusQ;
+      return vinOk && gradeOk && statusOk;
+    }});
+  }}, [rows, vinQ, gradeQ, statusQ]);
 
-function toggleRow(id) {{
-  checked.has(id) ? checked.delete(id) : checked.add(id);
-  render();
-}}
+  const allChecked  = filtered.length > 0 && checked.size === filtered.length;
+  const someChecked = checked.size > 0;
 
-function applyBulk() {{
-  if (!checked.size) return;
-  const ids = [...checked];
-  const counts = Object.assign({{}}, COUNTS);
-  allRows = allRows.map(r => {{
-    if (!checked.has(r._id)) return r;
-    const old = r["상태"];
-    if (counts[old] !== undefined) counts[old] = Math.max(0, (counts[old]||0)-1);
-    counts[bulkStatus] = (counts[bulkStatus]||0)+1;
-    return Object.assign({{}}, r, {{"상태": bulkStatus}});
-  }});
-  Object.assign(COUNTS, counts);
-  checked.clear();
-  applyFilter();
-  const fb = document.getElementById("fb");
-  fb.textContent = `${{ids.length}}건 → '${{bulkStatus}}'(으)로 변경 완료`;
-  fb.style.display = "block";
-  if (feedbackTimer) clearTimeout(feedbackTimer);
-  feedbackTimer = setTimeout(() => {{ fb.style.display="none"; }}, 3000);
-  renderSummary();
-}}
-
-function downloadCSV() {{
-  const cols = ["VIN","모델명","제조사","용량(kWh)","등급","상태","추천업체","등록 일자"];
-  const rows = [cols.join(","), ...filtered.map(r =>
-    cols.map(c => `"${{String(r[c]||"").replace(/"/g,'""')}}"`).join(",")
-  )];
-  const blob = new Blob(["\uFEFF" + rows.join("\n"), {{type:"text/csv;charset=utf-8"}}]);
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = "battery_list.csv";
-  a.click();
-}}
-
-function renderSummary() {{
-  const keys = Object.keys(COUNTS);
-  document.getElementById("summary").innerHTML = keys.map(k =>
-    `<div class="s-card"><div class="s-label">${{k}}</div><div class="s-count">${{COUNTS[k]||0}}</div></div>`
-  ).join("");
-}}
-
-function render() {{
-  const allChk = filtered.length > 0 && filtered.every(r => checked.has(r._id));
-  const n = checked.size;
-
-  document.getElementById("info").textContent = n > 0 ? `${{n}}건 선택` : `전체 ${{filtered.length}}건`;
-  document.getElementById("bulk-btn").disabled = n === 0;
-
-  const tbody = document.getElementById("tbody");
-  if (filtered.length === 0) {{
-    tbody.innerHTML = `<tr><td colspan="10" class="empty">조건에 맞는 배터리가 없습니다.</td></tr>`;
-  }} else {{
-    tbody.innerHTML = filtered.map(r => `
-      <tr class="${{checked.has(r._id) ? 'sel' : ''}}" onclick="toggleRow(${{r._id}})">
-        <td onclick="event.stopPropagation()">
-          <input type="checkbox" ${{checked.has(r._id)?'checked':''}} onchange="toggleRow(${{r._id}})"/>
-        </td>
-        <td>${{r.VIN||'—'}}</td>
-        <td>${{r['모델명']||'—'}}</td>
-        <td>${{r['제조사']||'—'}}</td>
-        <td>${{r['용량(kWh)'] != null ? Number(r['용량(kWh)']).toFixed(1) : '—'}}</td>
-        <td>${{badge(r['등급'], GC)}}</td>
-        <td>${{badge(r['상태'], SC)}}</td>
-        <td>${{r['추천업체']||'—'}}</td>
-        <td style="color:#6b7280;font-size:11px">${{r['등록 일자']||'—'}}</td>
-      </tr>`).join("");
-  }}
-  document.getElementById("chk-all").checked = allChk;
-}}
-
-window.onload = function() {{
-  // 상태 select 옵션 초기화
-  const sfEl = document.getElementById("sf");
-  SO.forEach(s => {{ const o = document.createElement("option"); o.value=s; o.textContent=s; sfEl.appendChild(o); }});
-  const bsEl = document.getElementById("bulk-sel");
-  BS.forEach(s => {{ const o = document.createElement("option"); o.value=s; o.textContent=s; bsEl.appendChild(o); }});
-  bulkStatus = BS[0];
-  bsEl.onchange = e => {{ bulkStatus = e.target.value; }};
-  document.getElementById("reset-btn").onclick = () => {{
-    document.getElementById("q").value = "";
-    document.getElementById("gf").value = "전체";
-    document.getElementById("sf").value = "전체";
-    applyFilter();
+  const toggleAll = () => {{
+    if (allChecked) setChecked(new Set());
+    else setChecked(new Set(filtered.map(r => r._id)));
   }};
-  document.getElementById("bulk-btn").onclick = applyBulk;
-  document.getElementById("csv-btn").onclick = downloadCSV;
-  document.getElementById("chk-all").onchange = toggleAll;
-  renderSummary();
-  render();
-}};
+
+  const toggleRow = id => {{
+    setChecked(prev => {{
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    }});
+  }};
+
+  const applyBulk = () => {{
+    if (!someChecked) return;
+    const ids = [...checked];
+    setRows(prev => prev.map(r => checked.has(r._id) ? {{...r, 상태: bulkStatus}} : r));
+    // 상태 카운트 업데이트
+    setCounts(prev => {{
+      const n = {{...prev}};
+      ids.forEach(id => {{
+        const row = rows.find(r => r._id === id);
+        if (row) {{
+          n[row["상태"]] = Math.max(0, (n[row["상태"]]||0) - 1);
+          n[bulkStatus]  = (n[bulkStatus]||0) + 1;
+        }}
+      }});
+      return n;
+    }});
+    setChecked(new Set());
+    setFeedback(`${{ids.length}}건 → '${{bulkStatus}}'(으)로 변경 완료`);
+    setTimeout(() => setFeedback(null), 3000);
+  }};
+
+  const resetFilter = () => {{ setVinQ(""); setGradeQ("전체"); setStatusQ("전체"); }};
+
+  return React.createElement("div", null,
+
+    // ── 필터 바
+    React.createElement("div", {{className:"filter-bar"}},
+      React.createElement("label", null, "VIN / 모델명"),
+      React.createElement("input", {{
+        type:"text", placeholder:"검색어 입력",
+        value: vinQ, onChange: e => setVinQ(e.target.value),
+      }}),
+      React.createElement("div", {{className:"filter-sep"}}),
+      React.createElement("label", null, "등급"),
+      React.createElement("select", {{value: gradeQ, onChange: e => setGradeQ(e.target.value)}},
+        GRADE_OPTIONS.map(g => React.createElement("option",{{key:g,value:g}},g))
+      ),
+      React.createElement("label", null, "상태"),
+      React.createElement("select", {{value: statusQ, onChange: e => setStatusQ(e.target.value)}},
+        STATUS_OPTIONS.map(s => React.createElement("option",{{key:s,value:s}},s))
+      ),
+      React.createElement("div", {{className:"filter-sep"}}),
+      React.createElement("button", {{className:"btn btn-primary", onClick:()=>{{}}}}, "조회"),
+      React.createElement("button", {{className:"btn btn-outline", onClick:resetFilter}}, "초기화"),
+    ),
+
+    // ── 상태 요약 카드
+    React.createElement("div", {{className:"summary-row"}},
+      Object.entries(counts).map(([label, cnt]) =>
+        React.createElement("div", {{key:label, className:"summary-card"}},
+          React.createElement("div", {{className:"s-label"}}, label),
+          React.createElement("div", {{className:"s-count"}}, cnt),
+        )
+      )
+    ),
+
+    // ── 테이블
+    React.createElement("div", {{className:"table-wrap"}},
+
+      // 툴바
+      React.createElement("div", {{className:"table-toolbar"}},
+        React.createElement("span", {{className:"info"}},
+          someChecked ? `${{checked.size}}건 선택` : `전체 ${{filtered.length}}건`
+        ),
+        React.createElement("select", {{
+          className:"status-select", value: bulkStatus,
+          onChange: e => setBulk(e.target.value), disabled: !someChecked,
+        }}, BULK_STATUSES.map(s => React.createElement("option",{{key:s,value:s}},s))),
+        React.createElement("button", {{
+          className:"btn btn-teal", disabled:!someChecked, onClick:applyBulk,
+        }}, `✅ 일괄 변경 (${{checked.size}}건)`),
+        React.createElement("button", {{
+          className:"btn btn-outline",
+          disabled: checked.size !== 1,
+          onClick: () => {{
+            const id = [...checked][0];
+            try {{ window.parent.postMessage({{type:"battery_detail",id}}, "*"); }} catch(e) {{}}
+          }},
+        }}, "🔍 상세보기"),
+      ),
+
+      feedback && React.createElement("div", {{className:"feedback fb-ok"}}, feedback),
+
+      // 테이블 본체
+      filtered.length === 0
+        ? React.createElement("div", {{className:"empty"}}, "조건에 맞는 배터리가 없습니다.")
+        : React.createElement("table", null,
+          React.createElement("thead", null,
+            React.createElement("tr", null,
+              React.createElement("th", null,
+                React.createElement("input", {{type:"checkbox", checked:allChecked, onChange:toggleAll}})
+              ),
+              ["VIN","모델명","제조사","용량(kWh)","등급","상태","추천업체"].map(h =>
+                React.createElement("th",{{key:h}},h)
+              )
+            )
+          ),
+          React.createElement("tbody", null,
+            filtered.map(row =>
+              React.createElement("tr", {{
+                key: row._id,
+                className: checked.has(row._id) ? "selected" : "",
+                onClick: () => toggleRow(row._id),
+              }},
+                React.createElement("td", {{onClick:e=>e.stopPropagation()}},
+                  React.createElement("input",{{type:"checkbox",checked:checked.has(row._id),onChange:()=>toggleRow(row._id)}})
+                ),
+                React.createElement("td", null, row["VIN"]),
+                React.createElement("td", null, row["모델명"]),
+                React.createElement("td", null, row["제조사"]),
+                React.createElement("td", null, row["용량(kWh)"] != null ? Number(row["용량(kWh)"]).toFixed(1) : "—"),
+                React.createElement("td", null, React.createElement(Badge,{{value:row["등급"],map:GRADE_COLOR}})),
+                React.createElement("td", null, React.createElement(Badge,{{value:row["상태"],map:STATUS_COLOR}})),
+                React.createElement("td", null, row["추천업체"]),
+              )
+            )
+          )
+        )
+    )
+  );
+}}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
 </script>
 </body>
 </html>"""
 
     n_rows = len(batteries) if batteries else 0
-    react_height = max(500, 340 + n_rows * 40) if n_rows > 0 else 300
+    react_height = min(max(400, 320 + n_rows * 38), 800)
     components.html(react_html, height=react_height, scrolling=False)
 
     # 상세보기는 기존 Streamlit dialog 활용
@@ -1193,8 +1231,8 @@ elif st.session_state.page == "company":
 
         _co_html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"/>
-<script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <style>
 * {{ box-sizing:border-box; margin:0; padding:0; }}
 body {{ font-family:'Malgun Gothic','Segoe UI',sans-serif; font-size:13px; background:#f0f2f6; }}
@@ -1270,7 +1308,7 @@ function App() {{
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
 </script></body></html>"""
 
-        components.html(_co_html, height=80 + len(_co_rows) * 42, scrolling=False)
+        components.html(_co_html, height=min(120 + len(_co_rows) * 38, 700), scrolling=False)
 
     else:
         st.warning("처리 업체 데이터를 불러오지 못했습니다. data/company_master_v3.csv를 확인해주세요.")
@@ -1338,7 +1376,7 @@ elif st.session_state.page == "intake":
             st.markdown(
                 """
                 <div class="qr-scan-section">
-                <b>QR코드 스캔</b> (또는 수동 입력)<br/>
+                📱 <b>QR코드 스캔</b> (또는 수동 입력)<br/>
                 VIN이 담긴 QR코드를 촬영하면 자동으로 입력됩니다.
                 </div>
                 """,
@@ -1347,24 +1385,24 @@ elif st.session_state.page == "intake":
 
             input_method = st.radio(
                 "입력 방식 선택",
-                ["카메라로 스캔", "수동 입력"],
+                ["📷 카메라로 스캔", "⌨️ 수동 입력"],
                 horizontal=True,
                 label_visibility="collapsed",
             )
 
-            if input_method == "카메라로 스캔":
-                st.info("VIN QR코드를 카메라에 비춰주세요. (약 3초 소요)")
+            if input_method == "📷 카메라로 스캔":
+                st.info("📷 VIN QR코드를 카메라에 비춰주세요. (약 3초 소요)")
 
                 camera_image = st.camera_input("카메라에서 촬영 (VIN QR코드)")
 
                 if camera_image is not None:
-                    st.markdown("**촬영된 이미지:**")
+                    st.markdown("**📸 촬영된 이미지:**")
                     st.image(camera_image, use_column_width=True)
 
                     decoded = decode_barcode(camera_image)
 
                     if decoded:
-                        st.success("QR코드 인식 성공!")
+                        st.success("✅ QR코드 인식 성공!")
 
                         vin_from_scan = decoded[0]["data"]
                         st.markdown(f"**인식된 데이터 ({decoded[0]['type']}):**")
@@ -1373,7 +1411,7 @@ elif st.session_state.page == "intake":
                         st.session_state.scanned_vin = vin_from_scan
                         vin = vin_from_scan
                     else:
-                        st.warning("QR코드를 인식하지 못했습니다. 더 명확한 이미지를 다시 촬영해주세요.")
+                        st.warning("⚠️ QR코드를 인식하지 못했습니다. 더 명확한 이미지를 다시 촬영해주세요.")
                         vin = ""
                 else:
                     vin = ""
@@ -1413,7 +1451,7 @@ elif st.session_state.page == "intake":
                             display: inline-flex; align-items: center; gap: 5px;
                             font-size: 11px; color: #f3821d; font-weight: 600;
                             text-decoration: none; margin-top: 4px;
-                        ">리콜 이력 조회 (국가기술표준원) →</a>
+                        ">⚠️ 리콜 이력 조회 (국가기술표준원) →</a>
                         """,
                         unsafe_allow_html=True,
                     )
@@ -1522,6 +1560,7 @@ elif st.session_state.page == "intake":
 
         # 03. 외관 상태
         condition_options = ["침수", "누액", "과열", "팽창", "충격"]
+        condition_icons = {"침수": "🌊", "누액": "💧", "과열": "🔥", "팽창": "↔️", "충격": "⚡"}
 
         card03 = st.container(border=True)
         with card03:
@@ -1530,7 +1569,7 @@ elif st.session_state.page == "intake":
             selected_conditions = st.pills(
                 "외관 상태",
                 options=condition_options,
-                format_func=lambda x: x,
+                format_func=lambda x: f"{condition_icons[x]} {x}",
                 selection_mode="multi",
                 label_visibility="collapsed",
                 key="hazard_pills",
@@ -1541,7 +1580,7 @@ elif st.session_state.page == "intake":
 
             num_class = "section-num-alert" if is_alert else ""
             badge_class = "status-badge-alert" if is_alert else "status-badge-ok"
-            badge_text = f"위험요소 {hazard_count}" if is_alert else "이상 없음"
+            badge_text = f"⚠️ 위험요소 {hazard_count}" if is_alert else "🛡️ 이상 없음"
 
             placeholder_header.markdown(
                 f"""
@@ -1648,7 +1687,7 @@ elif st.session_state.page == "intake":
                 grade = triage_result.get("grade")
 
                 if grade == "Red":
-                    st.warning("지정폐기물 판정 - 특별 처리 업체로 매칭합니다.")
+                    st.warning("⚠️ 지정폐기물 판정 - 특별 처리 업체로 매칭합니다.")
 
                 triage_id = triage_result.get("triage_id")
 
@@ -1692,7 +1731,7 @@ elif st.session_state.page == "intake":
             f"""
             <div class="triage-header">
                 <div class="triage-header-left">
-                    
+                    <div class="triage-logo-box">✅</div>
                     <div>
                         <p class="triage-header-text-sub">판정 결과 확인</p>
                         <p class="triage-header-text-main">담당자 승인</p>
@@ -1774,7 +1813,7 @@ elif st.session_state.page == "intake":
                 unsafe_allow_html=True,
             )
 
-            grade_emoji = {"Green": "", "Yellow": "", "Orange": "", "Gray": "", "Red": ""}
+            grade_emoji = {"Green": "✅", "Yellow": "⚠️", "Orange": "⚡", "Gray": "❌", "Red": "🚫"}
             path_label = {
                 "reuse_candidate": "재사용 후보",
                 "reuse_or_recycle_after_diagnosis": "추가진단 후 판단",
@@ -1888,7 +1927,7 @@ elif st.session_state.page == "intake":
                 # 발생 위치 마커 (파란색)
                 folium.Marker(
                     location=[origin_lat, origin_lon],
-                    popup=folium.Popup(f"<b> 발생위치</b><br>{channel_name}", max_width=200),
+                    popup=folium.Popup(f"<b>📍 발생위치</b><br>{channel_name}", max_width=200),
                     tooltip=channel_name,
                     icon=folium.Icon(color="blue", icon="home", prefix="fa"),
                 ).add_to(m)
@@ -1923,7 +1962,7 @@ elif st.session_state.page == "intake":
                         dash_array="5",
                     ).add_to(m)
 
-                st.markdown("** 처리업체 위치 지도**")
+                st.markdown("**📍 처리업체 위치 지도**")
                 st_folium(m, width="100%", height=340, returned_objects=[])
 
         st.markdown("<br>", unsafe_allow_html=True)
@@ -1935,7 +1974,7 @@ elif st.session_state.page == "intake":
                 st.rerun()
 
         with col2:
-            if st.button(" 저장", use_container_width=True):
+            if st.button("💾 저장", use_container_width=True):
                 # 현재 접수 건을 "승인 전" 상태로 저장하고 입력 화면으로 복귀
                 # (나중에 배터리 관리 페이지에서 승인 처리 가능)
                 st.session_state.step = "input"
@@ -1945,7 +1984,7 @@ elif st.session_state.page == "intake":
                 st.rerun()
 
         with col3:
-            if st.button("승인 (최종 확정)", use_container_width=True, type="primary"):
+            if st.button("✅ 승인 (최종 확정)", use_container_width=True, type="primary"):
                 st.session_state.step = "completed"
                 st.rerun()
 
@@ -1971,7 +2010,7 @@ elif st.session_state.page == "intake":
         st.markdown(
             """
             <div style="text-align: center; padding: 32px 16px;">
-                <div style="font-size: 64px; margin-bottom: 16px;"></div>
+                <div style="font-size: 64px; margin-bottom: 16px;">✨</div>
                 <p style="font-size: 20px; font-weight: 700; color: var(--c-foreground); margin-bottom: 6px;">처리 완료</p>
                 <p style="font-size: 13px; color: var(--c-muted-foreground); margin-bottom: 24px; line-height: 1.6;">배터리 판정 및 처리업체 매칭이<br/>완료되었습니다!</p>
             </div>
@@ -2007,11 +2046,11 @@ elif st.session_state.page == "intake":
             unsafe_allow_html=True,
         )
 
-        st.info("결과서 다운로드는 추후 추가 예정입니다")
+        st.info("📄 결과서 다운로드는 추후 추가 예정입니다")
 
         # PDF 판정 결과서 다운로드
-        st.markdown("#### 판정 결과서 다운로드")
-        if st.button("PDF 결과서 생성", use_container_width=True):
+        st.markdown("#### 📄 판정 결과서 다운로드")
+        if st.button("📥 PDF 결과서 생성", use_container_width=True):
             try:
                 pdf_res = requests.post(
                     f"{API_BASE_URL}/pdf/triage",
@@ -2020,7 +2059,7 @@ elif st.session_state.page == "intake":
                 )
                 if pdf_res.status_code == 200:
                     st.download_button(
-                        label="PDF 저장",
+                        label="⬇️ PDF 저장",
                         data=pdf_res.content,
                         file_name=f"triage_{completion_info['vin']}.pdf",
                         mime="application/pdf",
@@ -2032,9 +2071,9 @@ elif st.session_state.page == "intake":
                 st.error(f"PDF 요청 오류: {e}")
 
         # RAG 정책 리포트
-        st.markdown("####  정책 리포트 (AI)")
+        st.markdown("#### 📋 정책 리포트 (AI)")
         st.caption("판정 결과에 맞는 관련 법령·처리 가이드를 AI가 자동 생성합니다. 첫 호출은 약 1~2분 소요될 수 있습니다.")
-        if st.button("정책 리포트 생성", use_container_width=True):
+        if st.button("🤖 정책 리포트 생성", use_container_width=True):
             with st.spinner("AI가 관련 법령 및 정책을 분석 중입니다... (첫 호출 시 최대 2분 소요)"):
                 try:
                     report_res = requests.post(
@@ -2063,7 +2102,7 @@ elif st.session_state.page == "intake":
                     st.error(f"리포트 요청 오류: {e}")
 
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button(" 새 배터리 입력", use_container_width=True):
+        if st.button("🔄 새 배터리 입력", use_container_width=True):
             st.session_state.step = "input"
             st.session_state.intake_record = None
             st.session_state.triage_result = None
@@ -2074,7 +2113,7 @@ elif st.session_state.page == "intake":
         st.markdown(
             """
             <div class="footer-note">
-            Battery Triage Map © 2026 | 산업통상자원부 공공데이터 활용 아이디어 공모전
+            🔋 Battery Triage Map © 2026 | 산업통상자원부 공공데이터 활용 아이디어 공모전
             </div>
             """,
             unsafe_allow_html=True,

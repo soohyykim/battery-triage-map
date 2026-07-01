@@ -20,7 +20,7 @@ import streamlit as st
 # ---------------------------------------------------------------------------
 # 백엔드 API 주소
 # ---------------------------------------------------------------------------
-API_BASE_URL = os.environ.get("API_BASE_URL", "https://battery-triage-map-api.onrender.com")
+API_BASE_URL = os.environ.get("API_BASE_URL", "https://battery-triage-map-api-ve2w.onrender.com")
 
 # ---------------------------------------------------------------------------
 # 상태 정의 (백엔드AI 요청 메시지와 동일한 5단계 + 예외 2개)
@@ -109,8 +109,9 @@ def fetch_batteries(channel_name=None, status=None):
         res = requests.get(f"{API_BASE_URL}/history", params={"limit": 200}, timeout=10)
         res.raise_for_status()
         items = [_normalize_item(i) for i in res.json()]
-    except requests.RequestException:
-        items = []
+    except requests.RequestException as e:
+        st.error(f"배터리 목록을 불러오지 못했습니다: {e}")
+        return []
 
     if status and status != "전체":
         items = [b for b in items if b["status"] == status]
@@ -166,8 +167,6 @@ def get_status_counts(channel_name=None):
 def batteries_to_table_rows(batteries):
     rows = []
     for b in batteries:
-        _created = b.get("created_at", "")
-        _date = _created[:10] if _created else "—"
         rows.append({
             "VIN": b["vin"] or "—",
             "모델명": b["model_name"] or "—",
@@ -176,7 +175,6 @@ def batteries_to_table_rows(batteries):
             "등급": b["grade"] or "미판정",
             "상태": b["status"],
             "추천업체": b["matched_company"] or "—",
-            "등록 일자": _date,
             "_id": b["id"],
         })
     return rows
