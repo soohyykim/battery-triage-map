@@ -404,6 +404,31 @@ st.markdown(
             min-height: calc(100vh - 32px);
         }
 
+        /* 외관 상태 점검 pills 크기 조정 */
+        div[data-testid="stPills"] button {
+            padding: 4px 12px !important;
+            font-size: 12px !important;
+            min-height: 30px !important;
+        }
+
+        .sidebar-group-label {
+            font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+            color: rgba(255,255,255,0.35); text-transform: uppercase;
+            padding: 10px 4px 5px 4px;
+        }
+        .sidebar-divider {
+            border-top: 1px solid rgba(255,255,255,0.10);
+            margin: 10px 0 4px 0;
+        }
+        .sidebar-info-row {
+            font-size: 12px; color: rgba(255,255,255,0.65);
+            padding: 2px 4px; line-height: 1.9;
+        }
+        .sidebar-menu-disabled {
+            padding: 8px 12px; border-radius: 8px;
+            opacity: 0.35; font-size: 13px; font-weight: 600; color: #fff;
+            cursor: not-allowed;
+        }
         .sidebar-logo {
             display: flex;
             align-items: center;
@@ -616,92 +641,42 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
-    # ── 접수 관리 그룹 ──────────────────────────────
-    st.markdown(
-        """
-        <div style="
-            font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
-            color: rgba(255,255,255,0.4); text-transform: uppercase;
-            padding: 12px 4px 6px 4px; margin-top: 4px;
-        ">접수 관리</div>
-        """,
-        unsafe_allow_html=True,
-    )
-
     is_intake = st.session_state.page == "intake"
     is_list   = st.session_state.page == "battery_list"
 
-    if st.button(
-        "🔋  배터리 접수",
-        use_container_width=True,
-        type="primary" if is_intake else "secondary",
-        key="nav_intake",
-    ):
+    # ── 접수 관리 그룹 ──────────────────────────────
+    st.markdown(
+        '<div class="sidebar-group-label">접수 관리</div>',
+        unsafe_allow_html=True,
+    )
+
+    if st.button("🔋  배터리 접수", use_container_width=True, key="nav_intake"):
         st.session_state.page = "intake"
         st.session_state.step = "input"
         st.rerun()
 
-    if st.button(
-        "📋  배터리 관리",
-        use_container_width=True,
-        type="primary" if is_list else "secondary",
-        key="nav_list",
-    ):
+    if st.button("📋  배터리 관리", use_container_width=True, key="nav_list"):
         st.session_state.page = "battery_list"
         st.rerun()
 
-    # ── 구분선 ──────────────────────────────────────
-    st.markdown(
-        """
-        <div style="
-            border-top: 1px solid rgba(255,255,255,0.12);
-            margin: 14px 0 6px 0;
-        "></div>
-        <div style="
-            font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
-            color: rgba(255,255,255,0.4); text-transform: uppercase;
-            padding: 2px 4px 6px 4px;
-        ">채널 정보</div>
-        """,
-        unsafe_allow_html=True,
-    )
-
+    # ── 구분선 + 채널 정보 ──────────────────────────
     st.markdown(
         f"""
-        <div style="padding: 4px; font-size: 12px; color: rgba(255,255,255,0.7); line-height: 1.8;">
-            <div>🏢 {DUMMY_USER['channel_name']}</div>
-            <div>📌 {DUMMY_USER['channel_type']}</div>
-        </div>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-group-label">채널 정보</div>
+        <div class="sidebar-info-row">🏢 {DUMMY_USER['channel_name']}</div>
+        <div class="sidebar-info-row">📌 {DUMMY_USER['channel_type']}</div>
         """,
         unsafe_allow_html=True,
     )
 
-    # ── 구분선 ──────────────────────────────────────
+    # ── 구분선 + 설정 ────────────────────────────────
     st.markdown(
         """
-        <div style="
-            border-top: 1px solid rgba(255,255,255,0.12);
-            margin: 14px 0 6px 0;
-        "></div>
-        <div style="
-            font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
-            color: rgba(255,255,255,0.4); text-transform: uppercase;
-            padding: 2px 4px 6px 4px;
-        ">설정</div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.markdown(
-        """
-        <div style="
-            padding: 8px 12px; border-radius: 8px; cursor: not-allowed;
-            opacity: 0.4; font-size: 13px; font-weight: 600; color: #fff;
-        ">⚙️  발생채널 설정</div>
-        <div style="
-            padding: 8px 12px; border-radius: 8px; cursor: not-allowed;
-            opacity: 0.4; font-size: 13px; font-weight: 600; color: #fff;
-        ">📊  통계 / 리포트</div>
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-group-label">설정</div>
+        <div class="sidebar-menu-disabled">⚙️  발생채널 설정</div>
+        <div class="sidebar-menu-disabled">📊  통계 / 리포트</div>
         """,
         unsafe_allow_html=True,
     )
@@ -1111,14 +1086,6 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
     if st.session_state.get("selected_battery_id") and st.session_state.get("show_detail_panel"):
         show_battery_detail_dialog(st.session_state.selected_battery_id)
 
-    st.markdown(
-        """
-        <div class="footer-note">
-        🔋 Battery Triage Map © 2026 | 현재 더미 데이터로 표시 중 — 백엔드 API 연동 예정
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
 elif st.session_state.page == "intake":
     # =======================================================================
@@ -1352,7 +1319,7 @@ elif st.session_state.page == "intake":
             selected_conditions = st.pills(
                 "외관 상태",
                 options=condition_options,
-                format_func=lambda x: f"{condition_icons[x]}  {x}",
+                format_func=lambda x: f"{condition_icons[x]} {x}",
                 selection_mode="multi",
                 label_visibility="collapsed",
                 key="hazard_pills",
