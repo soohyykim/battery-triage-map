@@ -14,7 +14,7 @@ services:
     runtime: python
     plan: free
     branch: feat/api-rag-pdf          # 백엔드 최신 코드 브랜치 (main 머지 후 변경 가능)
-    buildCommand: "pip install -r requirements.txt && python data/init_db.py"
+    buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn api.main:app --host 0.0.0.0 --port $PORT"
     envVars:
       - key: PYTHON_VERSION
