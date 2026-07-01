@@ -1543,9 +1543,9 @@ elif st.session_state.page == "intake":
 
         # RAG 정책 리포트
         st.markdown("#### 📋 정책 리포트 (AI)")
-        st.caption("판정 결과에 맞는 관련 법령·처리 가이드를 AI가 자동 생성합니다. 첫 호출은 약 30~50초 소요될 수 있습니다.")
+        st.caption("판정 결과에 맞는 관련 법령·처리 가이드를 AI가 자동 생성합니다. 첫 호출은 약 1~2분 소요될 수 있습니다.")
         if st.button("🤖 정책 리포트 생성", use_container_width=True):
-            with st.spinner("AI가 관련 법령 및 정책을 분석 중입니다..."):
+            with st.spinner("AI가 관련 법령 및 정책을 분석 중입니다... (첫 호출 시 최대 2분 소요)"):
                 try:
                     report_res = requests.post(
                         f"{API_BASE_URL}/report",
@@ -1556,7 +1556,7 @@ elif st.session_state.page == "intake":
                                 for c in matched_companies[:3]
                             ],
                         },
-                        timeout=90,
+                        timeout=180,
                     )
                     if report_res.status_code == 200:
                         report_data = report_res.json()
