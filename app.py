@@ -460,8 +460,8 @@ st.markdown(
             display: flex;
             align-items: flex-start;
             flex-direction: column;
-            gap: 2px;
-            padding: 8px 4px 16px 4px;
+            gap: 4px;
+            padding: 1rem 4px 16px 4px;
             border-bottom: 1px solid rgba(255,255,255,0.15) !important;
             margin-bottom: 14px;
         }
@@ -477,7 +477,7 @@ st.markdown(
             font-size: 16px;
         }
         .sidebar-logo-text {
-            font-size: 18px;
+            font-size: 22px;
             font-weight: 800;
             color: #ffffff !important;
             line-height: 1.2;
@@ -1080,8 +1080,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
 </html>"""
 
     n_rows = len(batteries) if batteries else 0
-    react_height = 320 + n_rows * 40
-    components.html(react_html, height=react_height, scrolling=True)
+    react_height = max(500, 320 + n_rows * 40) if n_rows > 0 else 200
+    components.html(react_html, height=react_height, scrolling=False)
 
     # 상세보기는 기존 Streamlit dialog 활용
     if st.session_state.get("selected_battery_id") and st.session_state.get("show_detail_panel"):
@@ -1311,7 +1311,7 @@ function App() {{
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
 </script></body></html>"""
 
-        components.html(_co_html, height=120 + len(_co_rows) * 42, scrolling=True)
+        components.html(_co_html, height=80 + len(_co_rows) * 42, scrolling=False)
 
     else:
         st.warning("처리 업체 데이터를 불러오지 못했습니다. data/company_master_v3.csv를 확인해주세요.")
