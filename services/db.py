@@ -11,6 +11,9 @@ DB 영속 계층 (백엔드/AI 담당) — SQLAlchemy 기반, SQLite/PostgreSQL 
   - /triage 결과를 triage_history 에 저장 (save_triage)
   - /match 결과를 match_history 에 저장 (save_match)
   - 배터리 관리 페이지용 이력 조회 (list_history / get_history)
+    * list_history 는 match_history 1순위(rank=1) 업체명을 LEFT JOIN 해서
+      matched_company_name 으로 같이 내려준다 (관리 페이지 목록에서 추천업체
+      표시를 위해 항목마다 상세 조회를 추가로 안 해도 되게 하기 위함).
   - 담당자 승인 기록 (approve_triage)
 """
 from __future__ import annotations
@@ -49,6 +52,7 @@ metadata = MetaData()
 triage_history = Table(
     "triage_history", metadata,
     Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("vin", String),
     Column("manufacturer", String),
     Column("model_name", String),
     Column("vehicle_year", Integer),
@@ -112,7 +116,13 @@ _engine: Optional[Engine] = None
 
 
 def get_engine() -> Engine:
-    """엔진을 한 번만 만들어 캐시하고, 테이블이 없으면 생성한다."""
+    """엔진을 한 번만 만들어 캐시하고, 테이블이 없으면 생성한다.
+
+    환경변수 RESET_DB=true 가 설정되어 있으면, 기존 테이블을 전부 삭제하고
+    새 스키마로 재생성한다. (스키마 변경 시 1회성으로만 켜고, 재배포 확인 후
+    반드시 Render 환경변수에서 다시 제거할 것 — 매 배포마다 데이터가
+    초기화되는 걸 막기 위함)
+    """
     global _engine
     if _engine is None:
         url = _resolve_db_url()
@@ -122,6 +132,11 @@ def get_engine() -> Engine:
             connect_args = {"check_same_thread": False}
             Path(BASE_DIR / "data").mkdir(parents=True, exist_ok=True)
         _engine = create_engine(url, pool_pre_ping=True, connect_args=connect_args)
+
+        if os.getenv("RESET_DB", "").strip().lower() == "true":
+            print("[db] RESET_DB=true 감지 — 기존 테이블 삭제 후 재생성")
+            metadata.drop_all(_engine)
+
         metadata.create_all(_engine)  # 없으면 생성 (있으면 그대로)
     return _engine
 
@@ -140,12 +155,14 @@ def _row_to_dict(row: Row) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 def save_triage(
     result: dict[str, Any],
+    vin: Optional[str] = None,
     origin_latitude: Optional[float] = None,
     origin_longitude: Optional[float] = None,
 ) -> int:
-    """evaluate_battery() 결과 1건을 triage_history 에 저장하고 id 를 반환한다."""
+    """evaluate_battery() (또는 rule.py 분기) 결과 1건을 triage_history 에 저장하고 id 를 반환한다."""
     s = result.get("input_summary", {})
     values = {
+        "vin": vin,
         "manufacturer": s.get("manufacturer"),
         "model_name": s.get("model_name"),
         "vehicle_year": s.get("vehicle_year"),
@@ -196,9 +213,24 @@ def save_match(triage_id: int, match_result: dict[str, Any]) -> int:
 # 조회 (배터리 관리 페이지)
 # ---------------------------------------------------------------------------
 def list_history(limit: int = 100) -> list[dict[str, Any]]:
-    """최근 판정 이력 목록을 최신순으로 반환한다."""
+    """
+    최근 판정 이력 목록을 최신순으로 반환한다.
+
+    match_history 에서 triage_id 별 rank=1(1순위 추천업체) 행만 골라
+    LEFT JOIN 해서 matched_company_name 을 같이 내려준다. 매칭 이력이
+    없는 건(아직 /match 호출 안 됨)은 matched_company_name 이 None.
+    """
+    rank1 = (
+        select(match_history.c.triage_id, match_history.c.company_name)
+        .where(match_history.c.rank == 1)
+        .subquery()
+    )
+
     stmt = (
-        select(triage_history)
+        select(triage_history, rank1.c.company_name.label("matched_company_name"))
+        .select_from(
+            triage_history.outerjoin(rank1, triage_history.c.id == rank1.c.triage_id)
+        )
         .order_by(triage_history.c.created_at.desc(), triage_history.c.id.desc())
         .limit(limit)
     )
@@ -220,7 +252,9 @@ def get_history(triage_id: int) -> Optional[dict[str, Any]]:
             .order_by(match_history.c.rank)
         )
         result = _row_to_dict(row)
-        result["matched_companies"] = [_row_to_dict(m) for m in matches]
+        matched_list = [_row_to_dict(m) for m in matches]
+        result["matched_companies"] = matched_list
+        result["matched_company_name"] = matched_list[0]["company_name"] if matched_list else None
         return result
 
 

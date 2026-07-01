@@ -19,6 +19,7 @@ import cv2
 import numpy as np
 from PIL import Image
 import pandas as pd
+import requests
 
 from battery_data import (
     fetch_batteries,
@@ -32,6 +33,7 @@ from battery_data import (
     STATUS_COLOR,
     GRADE_EMOJI,
     DUMMY_USER,
+    API_BASE_URL,
 )
 
 # ---------------------------------------------------------------------------
@@ -530,34 +532,34 @@ st.markdown(
         }
         .summary-grid {
             display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 8px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
         }
         @media (max-width: 900px) {
             .summary-grid {
-                grid-template-columns: repeat(4, 1fr);
+                grid-template-columns: repeat(3, 1fr);
             }
         }
         @media (max-width: 480px) {
             .summary-grid {
-                grid-template-columns: repeat(3, 1fr);
+                grid-template-columns: repeat(2, 1fr);
             }
         }
         .summary-inner-box {
             background-color: var(--c-secondary);
             border: 1px solid var(--c-border);
-            border-radius: 8px;
-            padding: 10px 4px;
+            border-radius: 10px;
+            padding: 14px 8px;
             text-align: center;
         }
         .summary-inner-label {
-            font-size: 10px;
+            font-size: 11px;
             font-weight: 600;
             color: var(--c-muted-foreground);
-            margin-bottom: 4px;
+            margin-bottom: 6px;
         }
         .summary-inner-count {
-            font-size: 18px;
+            font-size: 22px;
             font-weight: 700;
             color: var(--c-foreground);
         }
@@ -1121,81 +1123,62 @@ elif st.session_state.page == "intake":
 
                 st.session_state.intake_record = intake_record
 
-                condition_flags = intake_record["condition_flags"]
-                is_designated_waste = any([
-                    condition_flags["flooded"],
-                    condition_flags["leakage"],
-                    condition_flags["overheated"],
-                    condition_flags["swollen"],
-                    condition_flags["impact"],
-                ])
+                # 발생채널별 임시 좌표 (실제 채널 주소 DB가 없어 시연용으로 고정값 사용)
+                CHANNEL_COORDS = {
+                    "강남폐차센터": (37.4979, 127.0276),
+                    "수원폐차센터": (37.2636, 127.0286),
+                    "인천폐차센터": (37.4563, 126.7052),
+                }
+                origin_lat, origin_lon = CHANNEL_COORDS.get(
+                    st.session_state.channel_name, (37.5665, 126.9780)  # 기본값: 서울시청
+                )
 
-                if is_designated_waste:
-                    st.error("⚠️ 지정폐기물 판정 - 특별 처리 필요")
+                triage_payload = {
+                    "vin": vin,
+                    "vehicle_year": intake_record["vehicle_info"]["model_year"],
+                    "mileage_km": mileage_km,
+                    "capacity_kwh": capacity_kwh,
+                    "chemistry": intake_record["vehicle_info"]["chemistry"] or "UNKNOWN",
+                    "manufacturer": manufacturer or None,
+                    "model_name": model_name or None,
+                    "battery_count": quantity or 1,
+                    "condition_flags": intake_record["condition_flags"],
+                }
+
+                try:
+                    triage_res = requests.post(
+                        f"{API_BASE_URL}/triage", json=triage_payload, timeout=15
+                    )
+                    triage_res.raise_for_status()
+                    triage_result = triage_res.json()
+                except requests.RequestException as e:
+                    st.error(f"배터리 판정 요청에 실패했습니다: {e}")
                     st.stop()
 
-                current_year = datetime.now().year
-                vehicle_year = intake_record["vehicle_info"]["model_year"] or 2020
-                age = current_year - vehicle_year
-                soh_proxy = 100 - (age * 3.0) - (mileage_km / 10000 * 1.8)
-                soh_proxy = max(0, min(100, soh_proxy))
+                grade = triage_result.get("grade")
 
-                if soh_proxy >= 75:
-                    grade = "Green"
-                    recommended_path = "재사용 후보"
-                elif soh_proxy >= 60:
-                    grade = "Yellow"
-                    recommended_path = "추가진단 후 판단"
-                elif soh_proxy >= 40:
-                    grade = "Orange"
-                    recommended_path = "재활용 후보"
-                else:
-                    grade = "Gray"
-                    recommended_path = "정밀진단 필요"
+                if grade == "Red":
+                    st.warning("⚠️ 지정폐기물 판정 - 특별 처리 업체로 매칭합니다.")
 
-                triage_result = {
-                    "soh_proxy_score": round(soh_proxy, 1),
-                    "grade": grade,
-                    "recommended_path": recommended_path,
-                    "chemistry": intake_record["vehicle_info"]["chemistry"] or "UNKNOWN",
-                    "capacity_kwh": capacity_kwh,
-                }
+                triage_id = triage_result.get("triage_id")
 
-                mock_companies = [
-                    {
-                        "rank": 1,
-                        "company_name": "충청자원순환",
-                        "region": "충남",
-                        "distance_km": 79.9,
-                        "diagnostic_capability": "basic",
-                        "process_type": "재활용",
-                        "total_score": 85.3,
-                    },
-                    {
-                        "rank": 2,
-                        "company_name": "인천배터리리사이클",
-                        "region": "인천",
-                        "distance_km": 45.2,
-                        "diagnostic_capability": "kolas",
-                        "process_type": "재활용",
-                        "total_score": 78.1,
-                    },
-                    {
-                        "rank": 3,
-                        "company_name": "경기재활용센터",
-                        "region": "경기",
-                        "distance_km": 35.5,
-                        "diagnostic_capability": "basic",
-                        "process_type": "재활용",
-                        "total_score": 72.4,
-                    },
-                ]
-
-                matching_result = {
-                    "status": "matched",
-                    "matched_companies": mock_companies,
-                    "grade": grade,
-                }
+                try:
+                    match_res = requests.post(
+                        f"{API_BASE_URL}/match",
+                        json={
+                            "triage_result": triage_result,
+                            "origin_latitude": origin_lat,
+                            "origin_longitude": origin_lon,
+                            "max_results": 3,
+                            "triage_id": triage_id,
+                        },
+                        timeout=15,
+                    )
+                    match_res.raise_for_status()
+                    matching_result = match_res.json()
+                except requests.RequestException as e:
+                    st.error(f"처리업체 매칭 요청에 실패했습니다: {e}")
+                    matching_result = {"status": "no_match", "matched_companies": [], "grade": grade}
 
                 st.session_state.triage_result = triage_result
                 st.session_state.matching_result = matching_result
@@ -1279,7 +1262,7 @@ elif st.session_state.page == "intake":
                         </div>
                         <div class="info-item">
                             <span class="info-label">용량</span>
-                            <span class="info-value">{triage_result['capacity_kwh']} kWh</span>
+                            <span class="info-value">{intake_record['identification']['capacity_kwh']} kWh</span>
                         </div>
                     </div>
                 </div>
@@ -1301,14 +1284,21 @@ elif st.session_state.page == "intake":
                 unsafe_allow_html=True,
             )
 
-            grade_emoji = {"Green": "✅", "Yellow": "⚠️", "Orange": "⚡", "Gray": "❌"}
+            grade_emoji = {"Green": "✅", "Yellow": "⚠️", "Orange": "⚡", "Gray": "❌", "Red": "🚫"}
+            path_label = {
+                "reuse_candidate": "재사용 후보",
+                "reuse_or_recycle_after_diagnosis": "추가진단 후 판단",
+                "recycle_candidate": "재활용 후보",
+                "diagnosis_required": "정밀진단 필요",
+                "designated_waste": "지정폐기물 처리",
+            }.get(triage_result['recommended_path'], triage_result['recommended_path'])
             st.markdown(
                 f"""
                 <div class="info-card">
                     <div class="info-card-row">
                         <div class="info-item">
                             <span class="info-label">SOH Proxy</span>
-                            <span class="info-value">{triage_result['soh_proxy_score']}%</span>
+                            <span class="info-value">{f"{triage_result['soh_proxy_score']}%" if triage_result.get('soh_proxy_score') is not None else "—"}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">등급</span>
@@ -1318,11 +1308,11 @@ elif st.session_state.page == "intake":
                     <div class="info-card-row">
                         <div class="info-item">
                             <span class="info-label">처리 방향</span>
-                            <span class="info-value">{triage_result['recommended_path']}</span>
+                            <span class="info-value">{path_label}</span>
                         </div>
                         <div class="info-item">
                             <span class="info-label">화학계</span>
-                            <span class="info-value">{triage_result['chemistry']}</span>
+                            <span class="info-value">{intake_record['vehicle_info']['chemistry'] or 'UNKNOWN'}</span>
                         </div>
                     </div>
                 </div>
@@ -1344,7 +1334,18 @@ elif st.session_state.page == "intake":
                 unsafe_allow_html=True,
             )
 
-            for company in matching_result['matched_companies']:
+            matched_companies = matching_result.get('matched_companies') or []
+            if not matched_companies:
+                st.markdown(
+                    """
+                    <div style="background-color: var(--c-card); border: 1.5px solid var(--c-border); border-radius: 12px; padding: 16px; text-align: center; color: var(--c-muted-foreground); font-size: 13px;">
+                        추천 처리업체가 없습니다. (지정폐기물 또는 매칭 실패)
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            for company in matched_companies:
                 st.markdown(
                     f"""
                     <div style="background-color: var(--c-card); border: 1.5px solid var(--c-border); border-radius: 12px; padding: 14px; margin-bottom: 10px;">
@@ -1374,6 +1375,67 @@ elif st.session_state.page == "intake":
                     unsafe_allow_html=True,
                 )
 
+            # 지도 표시 (매칭된 업체가 있고 좌표가 있을 때)
+            if matched_companies and any(c.get('latitude') and c.get('longitude') for c in matched_companies):
+                import folium
+                from streamlit_folium import st_folium
+
+                channel_name = st.session_state.get("channel_name", "강남폐차센터")
+                CHANNEL_COORDS = {
+                    "강남폐차센터": (37.4979, 127.0276),
+                    "수원폐차센터": (37.2636, 127.0286),
+                    "인천폐차센터": (37.4563, 126.7052),
+                }
+                origin_lat, origin_lon = CHANNEL_COORDS.get(channel_name, (37.5665, 126.9780))
+
+                all_lats = [origin_lat] + [c['latitude'] for c in matched_companies if c.get('latitude')]
+                all_lons = [origin_lon] + [c['longitude'] for c in matched_companies if c.get('longitude')]
+                center_lat = sum(all_lats) / len(all_lats)
+                center_lon = sum(all_lons) / len(all_lons)
+
+                m = folium.Map(location=[center_lat, center_lon], zoom_start=7, tiles="CartoDB positron")
+
+                # 발생 위치 마커 (파란색)
+                folium.Marker(
+                    location=[origin_lat, origin_lon],
+                    popup=folium.Popup(f"<b>📍 발생위치</b><br>{channel_name}", max_width=200),
+                    tooltip=channel_name,
+                    icon=folium.Icon(color="blue", icon="home", prefix="fa"),
+                ).add_to(m)
+
+                # 순위별 업체 마커 색상
+                rank_colors = {1: "red", 2: "orange", 3: "green"}
+
+                for company in matched_companies:
+                    if not company.get('latitude') or not company.get('longitude'):
+                        continue
+                    rank = company['rank']
+                    color = rank_colors.get(rank, "gray")
+                    folium.Marker(
+                        location=[company['latitude'], company['longitude']],
+                        popup=folium.Popup(
+                            f"<b>{rank}순위: {company['company_name']}</b><br>"
+                            f"거리: {company['distance_km']}km<br>"
+                            f"점수: {company['total_score']:.1f}<br>"
+                            f"처리유형: {company['process_type']}",
+                            max_width=220,
+                        ),
+                        tooltip=f"{rank}순위 {company['company_name']}",
+                        icon=folium.Icon(color=color, icon="industry", prefix="fa"),
+                    ).add_to(m)
+
+                    # 발생위치 → 업체 선 연결
+                    folium.PolyLine(
+                        locations=[[origin_lat, origin_lon], [company['latitude'], company['longitude']]],
+                        color=color,
+                        weight=2,
+                        opacity=0.5,
+                        dash_array="5",
+                    ).add_to(m)
+
+                st.markdown("**📍 처리업체 위치 지도**")
+                st_folium(m, width="100%", height=340, returned_objects=[])
+
         st.markdown("<br>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 1, 1.2], gap="small")
 
@@ -1383,7 +1445,9 @@ elif st.session_state.page == "intake":
                 st.rerun()
 
         with col2:
-            if st.button("❌ 반려", use_container_width=True):
+            if st.button("💾 저장", use_container_width=True):
+                # 현재 접수 건을 "승인 전" 상태로 저장하고 입력 화면으로 복귀
+                # (나중에 배터리 관리 페이지에서 승인 처리 가능)
                 st.session_state.step = "input"
                 st.session_state.intake_record = None
                 st.session_state.triage_result = None
@@ -1403,11 +1467,14 @@ elif st.session_state.page == "intake":
         triage_result = st.session_state.triage_result
         matching_result = st.session_state.matching_result
 
+        matched_companies = matching_result.get('matched_companies') or []
+        rank1_company_name = matched_companies[0]['company_name'] if matched_companies else "—"
+
         completion_info = {
             "timestamp": datetime.now().isoformat(),
             "vin": intake_record['identification']['vin'],
             "grade": triage_result['grade'],
-            "matched_company_rank1": matching_result['matched_companies'][0]['company_name'],
+            "matched_company_rank1": rank1_company_name,
             "status": "approved",
         }
 

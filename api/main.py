@@ -2,12 +2,17 @@
 api/main.py
 Battery Triage Map - FastAPI 엔드포인트 4개.
 
-  POST /triage  -> 배터리 예비 판정 (evaluate_battery)   services/triage.py   [데엔]
+  POST /triage  -> rule.py(지정폐기물 1차 선별) 후 배터리 예비 판정 (evaluate_battery)
+                   services/rule.py [팀장], services/triage.py [데엔]
   POST /score   -> 잔존가치 점수 요약 (triage 점수부)      services/triage.py   [데엔]
   POST /match   -> 처리기업 매칭 (match_companies)        services/matching.py [데엔]
   POST /report  -> 정책 RAG 리포트                        services/rag.py      [백엔드/AI]
 
 흐름: rule.py(지정폐기물 1차 선별, 팀장) → /triage → /match → /report
+  - rule.py 가 침수/누액/과열/팽창/충격 중 1개 이상 True 로 판정하면
+    evaluate_battery() 를 호출하지 않고 즉시 Red/지정폐기물 결과로 응답한다.
+  - 정상이면 기존처럼 evaluate_battery() 로 넘어간다.
+
 실행:  python -m uvicorn api.main:app --reload   ->  http://127.0.0.1:8000/docs
 """
 from __future__ import annotations
@@ -37,6 +42,7 @@ from api.schemas import (
 from services import triage as triage_svc
 from services import matching as matching_svc
 from services import db as db_svc
+from services import rule as rule_svc
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 COMPANIES_CSV = BASE_DIR / "data" / "companies_mock.csv"
@@ -44,7 +50,7 @@ COMPANIES_CSV = BASE_DIR / "data" / "companies_mock.csv"
 app = FastAPI(
     title="Battery Triage Map API",
     description="전기차 사용후 배터리 가치 판정 및 처리기업 매칭 의사결정 지원 API",
-    version="0.2.0",
+    version="0.3.0",
 )
 
 # 프론트엔드 분리 배포(React/Vercel 등) 대비 CORS 허용. MVP 단계라 전체 허용.
@@ -70,21 +76,70 @@ def health():
     return {
         "status": "ok",
         "service": "battery-triage-map",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "companies_loaded": int(len(df)),
     }
 
 
+def _build_designated_waste_result(req: BatteryInput, rule_result: dict) -> dict:
+    """
+    rule.py 가 지정폐기물로 판정했을 때, evaluate_battery() 와 동일한 응답
+    형태(TriageResponse 스키마)로 맞춰서 즉시 반환할 결과를 만든다.
+    점수류(soh_proxy_score 등)는 rule.py 단계에서는 계산하지 않으므로 None.
+    """
+    return {
+        "status": "rule_checked",
+        "result_type": "preliminary_estimate",
+        "input_summary": {
+            "manufacturer": req.manufacturer,
+            "model_name": req.model_name,
+            "vehicle_year": req.vehicle_year,
+            "mileage_km": req.mileage_km,
+            "capacity_kwh": req.capacity_kwh,
+            "chemistry": req.chemistry,
+            "battery_count": req.battery_count,
+        },
+        "soh_proxy_score": None,
+        "reuse_score": None,
+        "recycle_score": None,
+        "grade": "Red",
+        "recommended_path": "designated_waste",
+        "required_diagnostic_capability": "none",
+        "collection_route": "지정폐기물 처리 루트",
+        "data_confidence": None,
+        "reason_codes": rule_result["reason_codes"],
+    }
+
+
 # ---------------------------------------------------------------------------
-# POST /triage  - 배터리 예비 판정 (evaluate_battery)
+# POST /triage  - rule.py 1차 선별 후 배터리 예비 판정 (evaluate_battery)
 # ---------------------------------------------------------------------------
 @app.post("/triage", response_model=TriageResponse, tags=["triage"])
 def triage(req: BatteryInput):
-    result = triage_svc.evaluate_battery(**req.model_dump())
+    # 1) rule.py: 침수/누액/과열/팽창/충격 1차 선별
+    rule_result = rule_svc.check_designated_waste(
+        {"condition_flags": req.condition_flags.model_dump()}
+    )
+
+    if rule_result["is_designated_waste"]:
+        result = _build_designated_waste_result(req, rule_result)
+    else:
+        # 2) 정상 통과 -> 기존 triage.py 평가
+        result = triage_svc.evaluate_battery(
+            vehicle_year=req.vehicle_year,
+            mileage_km=req.mileage_km,
+            capacity_kwh=req.capacity_kwh,
+            chemistry=req.chemistry,
+            manufacturer=req.manufacturer,
+            model_name=req.model_name,
+            battery_count=req.battery_count,
+            current_year=req.current_year,
+        )
+
     # 판정 결과를 이력 DB에 저장하고, 발급된 id를 응답에 실어 보낸다.
     # (프론트가 이 triage_id를 /match 요청에 그대로 넣으면 매칭 이력이 연결된다.)
     try:
-        result["triage_id"] = db_svc.save_triage(result)
+        result["triage_id"] = db_svc.save_triage(result, vin=req.vin)
     except Exception as e:  # DB 문제로 판정 자체가 막히지 않도록 방어
         print(f"[main] triage 저장 실패(무시하고 결과 반환): {e}")
         result["triage_id"] = None
@@ -96,7 +151,28 @@ def triage(req: BatteryInput):
 # ---------------------------------------------------------------------------
 @app.post("/score", response_model=ScoreResponse, tags=["score"])
 def score(req: BatteryInput):
-    result = triage_svc.evaluate_battery(**req.model_dump())
+    rule_result = rule_svc.check_designated_waste(
+        {"condition_flags": req.condition_flags.model_dump()}
+    )
+    if rule_result["is_designated_waste"]:
+        return {
+            "grade": "Red",
+            "soh_proxy_score": None,
+            "reuse_score": None,
+            "recycle_score": None,
+            "data_confidence": None,
+        }
+
+    result = triage_svc.evaluate_battery(
+        vehicle_year=req.vehicle_year,
+        mileage_km=req.mileage_km,
+        capacity_kwh=req.capacity_kwh,
+        chemistry=req.chemistry,
+        manufacturer=req.manufacturer,
+        model_name=req.model_name,
+        battery_count=req.battery_count,
+        current_year=req.current_year,
+    )
     return {
         "grade": result["grade"],
         "soh_proxy_score": result["soh_proxy_score"],
