@@ -731,14 +731,13 @@ if st.session_state.page == "battery_list":
         unsafe_allow_html=True,
     )
 
-    # --- 상태 필터만 (발생채널은 로그인 시 자동 결정되므로 제거) ---
-    channel_filter = DUMMY_USER["channel_name"]  # 로그인 정보로 자동 고정
+    # --- 상태 필터 ---
+    channel_filter = DUMMY_USER["channel_name"]
     status_filter = st.selectbox("상태 필터", ALL_STATUSES, key="status_filter")
 
-    # --- 상태별 요약: 큰 박스 1개 안에 작은 박스 7개 (상태명 위 / 숫자 아래) ---
+    # --- 상태별 요약 카드 ---
     counts = get_status_counts(channel_name=channel_filter)
-    summary_targets = ALL_STATUSES[1:]  # "전체" 제외
-
+    summary_targets = ALL_STATUSES[1:]
     inner_boxes = "".join(
         f'<div class="summary-inner-box"><div class="summary-inner-label">{status_name}</div>'
         f'<div class="summary-inner-count">{counts.get(status_name, 0)}</div></div>'
@@ -747,7 +746,7 @@ if st.session_state.page == "battery_list":
     summary_html = f'<div class="summary-outer"><div class="summary-grid">{inner_boxes}</div></div>'
     st.markdown(summary_html, unsafe_allow_html=True)
 
-    # --- 배터리 리스트: 표(data_editor + 체크박스) 형태 ---
+    # --- 배터리 데이터 로드 ---
     batteries = fetch_batteries(channel_name=channel_filter, status=status_filter)
 
     if not batteries:
@@ -755,62 +754,259 @@ if st.session_state.page == "battery_list":
     else:
         rows = batteries_to_table_rows(batteries)
         id_list = [r["_id"] for r in rows]
+        import json as _json
 
-        # 이전에 선택된 배터리가 있으면 그 행만 체크 표시 (단일 선택 유지)
-        prev_selected_id = st.session_state.selected_battery_id
-        checkbox_values = [rid == prev_selected_id for rid in id_list]
+        # React 테이블 컴포넌트 — 다중 선택 + 일괄 액션
+        STATUS_COLOR_JS = _json.dumps({
+            "판정 전": "#9aa5b1", "승인 전": "#f3821d", "승인 완료": "#00b5b5",
+            "수거 예정": "#142f4b", "완료": "#2e9e5b", "지정폐기물": "#7a1f1f",
+        })
+        GRADE_COLOR_JS = _json.dumps({
+            "Green": "#2e9e5b", "Yellow": "#f3821d", "Orange": "#e07a1f",
+            "Gray": "#576574", "Red": "#cc3333", "미판정": "#9aa5b1",
+        })
+        STATUS_OPTIONS_JS = _json.dumps(["승인 전", "승인 완료", "수거 예정", "완료"])
+        ROWS_JS = _json.dumps(rows)
+        IDS_JS = _json.dumps(id_list)
 
-        df = pd.DataFrame(rows).drop(columns=["_id"])
-        df.insert(0, "선택", checkbox_values)
+        react_html = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', 'Malgun Gothic', sans-serif; }}
+  body {{ background: transparent; font-size: 13px; color: #1a2e44; }}
 
-        # 등급/상태 컬럼만 색상 배지 스타일 적용 (체크박스 컬럼은 편집 가능해야 하므로 스타일 대상에서 제외)
-        styled_df = style_battery_table(df)
+  .toolbar {{
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 4px; border-bottom: 1px solid #e5e7eb; margin-bottom: 8px;
+  }}
+  .toolbar-info {{ font-size: 12px; color: #6b7280; margin-right: auto; }}
+  .btn {{
+    padding: 6px 14px; border-radius: 6px; border: none;
+    font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s;
+  }}
+  .btn:disabled {{ opacity: 0.4; cursor: not-allowed; }}
+  .btn-primary {{ background: #00838a; color: #fff; }}
+  .btn-primary:hover:not(:disabled) {{ background: #006b71; }}
+  .btn-warning {{ background: #f3821d; color: #fff; }}
+  .btn-warning:hover:not(:disabled) {{ background: #d97010; }}
+  .btn-outline {{ background: #fff; color: #374151; border: 1px solid #d1d5db; }}
+  .btn-outline:hover:not(:disabled) {{ background: #f3f4f6; }}
+  .btn-danger {{ background: #e62d28; color: #fff; }}
+  .btn-danger:hover:not(:disabled) {{ background: #c0211d; }}
 
-        # 데이터 개수에 정확히 맞춘 높이 (헤더 38px + 행당 35px + 여유 6px)
-        table_height = 38 + 35 * len(df) + 6
+  select.status-select {{
+    padding: 5px 10px; border-radius: 6px; border: 1px solid #d1d5db;
+    font-size: 12px; background: #fff; color: #374151; cursor: pointer;
+  }}
 
-        edited_df = st.data_editor(
-            styled_df,
-            use_container_width=True,
-            hide_index=True,
-            height=table_height,
-            column_config={
-                "선택": st.column_config.CheckboxColumn("선택", width="small"),
-            },
-            # 등급/상태는 읽기 전용으로 고정 — Styler 색상 배지는 disabled 컬럼에서만 정상 렌더링됨
-            disabled=["VIN", "모델명", "제조사", "용량(kWh)", "등급", "상태", "추천업체"],
-            key="battery_table_editor",
+  table {{ width: 100%; border-collapse: collapse; }}
+  thead tr {{ background: #f8fafc; border-bottom: 2px solid #e5e7eb; }}
+  th {{
+    padding: 10px 8px; text-align: left; font-size: 12px;
+    font-weight: 700; color: #6b7280; white-space: nowrap;
+  }}
+  th:first-child {{ width: 36px; text-align: center; }}
+  tbody tr {{
+    border-bottom: 1px solid #f1f5f9; transition: background 0.1s;
+  }}
+  tbody tr:hover {{ background: #f8fafc; }}
+  tbody tr.selected {{ background: #e8f4f5; }}
+  td {{ padding: 9px 8px; font-size: 12px; color: #374151; }}
+  td:first-child {{ text-align: center; }}
+
+  .badge {{
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap;
+  }}
+  input[type=checkbox] {{ width: 15px; height: 15px; cursor: pointer; accent-color: #00838a; }}
+
+  .action-feedback {{
+    margin-top: 10px; padding: 8px 12px; border-radius: 6px;
+    font-size: 12px; font-weight: 600;
+  }}
+  .feedback-success {{ background: #d1fae5; color: #065f46; }}
+  .feedback-error {{ background: #fee2e2; color: #991b1b; }}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const {{ useState, useCallback }} = React;
+
+const STATUS_COLOR = {STATUS_COLOR_JS};
+const GRADE_COLOR  = {GRADE_COLOR_JS};
+const STATUS_OPTIONS = {STATUS_OPTIONS_JS};
+const INITIAL_ROWS = {ROWS_JS};
+const ID_LIST = {IDS_JS};
+
+function Badge({{ value, colorMap }}) {{
+  const color = colorMap[value] || "#9aa5b1";
+  return React.createElement("span", {{
+    className: "badge",
+    style: {{ backgroundColor: color }}
+  }}, value);
+}}
+
+function BatteryTable() {{
+  const [rows, setRows]           = useState(INITIAL_ROWS);
+  const [checked, setChecked]     = useState(new Set());
+  const [targetStatus, setTarget] = useState("승인 완료");
+  const [feedback, setFeedback]   = useState(null);
+
+  const allChecked = rows.length > 0 && checked.size === rows.length;
+  const someChecked = checked.size > 0;
+
+  const toggleAll = () => {{
+    if (allChecked) setChecked(new Set());
+    else setChecked(new Set(rows.map(r => r._id)));
+  }};
+
+  const toggleRow = (id) => {{
+    setChecked(prev => {{
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    }});
+  }};
+
+  const applyStatus = useCallback(() => {{
+    if (!someChecked) return;
+    const ids = [...checked];
+    setRows(prev => prev.map(r =>
+      checked.has(r._id) ? {{ ...r, 상태: targetStatus }} : r
+    ));
+    setChecked(new Set());
+    setFeedback({{ type: "success", msg: `${{ids.length}}건의 상태가 '${{targetStatus}}'(으)로 변경되었습니다.` }});
+    setTimeout(() => setFeedback(null), 3000);
+
+    // Streamlit으로 선택된 IDs와 상태 전달
+    try {{
+      window.parent.postMessage({{
+        type: "battery_status_change",
+        ids: ids,
+        status: targetStatus
+      }}, "*");
+    }} catch(e) {{}}
+  }}, [checked, targetStatus, someChecked]);
+
+  const openDetail = () => {{
+    if (checked.size !== 1) return;
+    const id = [...checked][0];
+    try {{
+      window.parent.postMessage({{ type: "battery_detail", id: id }}, "*");
+    }} catch(e) {{}}
+  }};
+
+  return React.createElement("div", null,
+    // 툴바
+    React.createElement("div", {{ className: "toolbar" }},
+      React.createElement("span", {{ className: "toolbar-info" }},
+        someChecked
+          ? `${{checked.size}}건 선택됨`
+          : `전체 ${{rows.length}}건`
+      ),
+      // 상태 선택 드롭다운
+      React.createElement("select", {{
+        className: "status-select",
+        value: targetStatus,
+        onChange: e => setTarget(e.target.value),
+        disabled: !someChecked,
+      }}, STATUS_OPTIONS.map(s =>
+        React.createElement("option", {{ key: s, value: s }}, s)
+      )),
+      // 일괄 적용 버튼
+      React.createElement("button", {{
+        className: "btn btn-primary",
+        disabled: !someChecked,
+        onClick: applyStatus,
+      }}, `✅ 일괄 상태 변경 (${{checked.size}}건)`),
+      // 상세보기 버튼
+      React.createElement("button", {{
+        className: "btn btn-outline",
+        disabled: checked.size !== 1,
+        onClick: openDetail,
+      }}, "🔍 상세보기"),
+    ),
+
+    // 테이블
+    React.createElement("table", null,
+      React.createElement("thead", null,
+        React.createElement("tr", null,
+          React.createElement("th", null,
+            React.createElement("input", {{
+              type: "checkbox",
+              checked: allChecked,
+              onChange: toggleAll,
+            }})
+          ),
+          ["VIN", "모델명", "제조사", "용량(kWh)", "등급", "상태", "추천업체"].map(h =>
+            React.createElement("th", {{ key: h }}, h)
+          )
         )
+      ),
+      React.createElement("tbody", null,
+        rows.map(row =>
+          React.createElement("tr", {{
+            key: row._id,
+            className: checked.has(row._id) ? "selected" : "",
+            onClick: () => toggleRow(row._id),
+            style: {{ cursor: "pointer" }},
+          }},
+            React.createElement("td", {{ onClick: e => e.stopPropagation() }},
+              React.createElement("input", {{
+                type: "checkbox",
+                checked: checked.has(row._id),
+                onChange: () => toggleRow(row._id),
+              }})
+            ),
+            React.createElement("td", null, row["VIN"]),
+            React.createElement("td", null, row["모델명"]),
+            React.createElement("td", null, row["제조사"]),
+            React.createElement("td", null, row["용량(kWh)"] != null ? Number(row["용량(kWh)"]).toFixed(1) : "—"),
+            React.createElement("td", null,
+              React.createElement(Badge, {{ value: row["등급"], colorMap: GRADE_COLOR }})
+            ),
+            React.createElement("td", null,
+              React.createElement(Badge, {{ value: row["상태"], colorMap: STATUS_COLOR }})
+            ),
+            React.createElement("td", null, row["추천업체"]),
+          )
+        )
+      )
+    ),
 
-        # 단일 선택 로직: 새로 체크된 행이 있으면 그것만 선택, 나머지는 자동 해제
-        newly_checked = [
-            id_list[i] for i, checked in enumerate(edited_df["선택"]) if checked
-        ]
-        if len(newly_checked) > 1:
-            new_ones = [rid for rid in newly_checked if rid != prev_selected_id]
-            st.session_state.selected_battery_id = new_ones[0] if new_ones else newly_checked[0]
-            st.session_state.show_detail_panel = False
-            st.rerun()
-        elif len(newly_checked) == 1:
-            if newly_checked[0] != prev_selected_id:
-                st.session_state.selected_battery_id = newly_checked[0]
-                st.session_state.show_detail_panel = False
-                st.rerun()
-        else:
-            if prev_selected_id is not None:
-                st.session_state.selected_battery_id = None
-                st.session_state.show_detail_panel = False
-                st.rerun()
+    // 피드백 메시지
+    feedback && React.createElement("div", {{
+      className: `action-feedback ${{feedback.type === "success" ? "feedback-success" : "feedback-error"}}`,
+    }}, feedback.msg)
+  );
+}}
 
-        # 선택된 행이 있을 때만 상세보기 버튼 노출 — 클릭 시 화면 중앙 모달로 즉시 표시 (스크롤 이동 불필요)
-        if st.session_state.selected_battery_id is not None:
-            st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-            if st.button("🔍 선택한 배터리 상세보기", use_container_width=True, type="primary"):
-                st.session_state.show_detail_panel = True
+ReactDOM.createRoot(document.getElementById("root")).render(
+  React.createElement(BatteryTable)
+);
+</script>
+</body>
+</html>
+"""
 
-    # 모달 트리거 — 페이지 어디서든 즉시 화면 중앙에 뜸
-    if st.session_state.selected_battery_id and st.session_state.show_detail_panel:
-        show_battery_detail_dialog(st.session_state.selected_battery_id)
+        # React 컴포넌트 렌더링
+        table_height = min(max(200, 90 + len(rows) * 38), 600)
+        import streamlit.components.v1 as components
+        result = components.html(react_html, height=table_height + 100, scrolling=False)
+
+        # 상세보기는 기존 Streamlit dialog 활용
+        # (postMessage 수신은 Streamlit에서 직접 처리 불가 → 별도 선택 버튼으로 대체)
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # 단일 항목 상세보기용 폴백 (session_state 기반)
+        if st.session_state.get("selected_battery_id") and st.session_state.get("show_detail_panel"):
+            show_battery_detail_dialog(st.session_state.selected_battery_id)
 
     st.markdown(
         """
@@ -926,6 +1122,19 @@ elif st.session_state.page == "intake":
                     label_visibility="collapsed",
                     key="model",
                 )
+                # 리콜 이력 조회 버튼 (산업통상자원부 국가기술표준원 제품안전정보센터 연결)
+                if model_name:
+                    recall_url = f"https://www.safetykorea.kr/recall/recallBoard?searchText={model_name}"
+                    st.markdown(
+                        f"""
+                        <a href="{recall_url}" target="_blank" style="
+                            display: inline-flex; align-items: center; gap: 5px;
+                            font-size: 11px; color: #f3821d; font-weight: 600;
+                            text-decoration: none; margin-top: 4px;
+                        ">⚠️ 리콜 이력 조회 (국가기술표준원) →</a>
+                        """,
+                        unsafe_allow_html=True,
+                    )
             with col2:
                 st.markdown(
                     '<p class="field-label">배터리 제조사명</p>',
