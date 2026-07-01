@@ -20,7 +20,7 @@ import streamlit as st
 # ---------------------------------------------------------------------------
 # 백엔드 API 주소
 # ---------------------------------------------------------------------------
-API_BASE_URL = os.environ.get("API_BASE_URL", "https://battery-triage-map-api-ve2w.onrender.com")
+API_BASE_URL = os.environ.get("API_BASE_URL", "https://battery-triage-map-api.onrender.com")
 
 # ---------------------------------------------------------------------------
 # 상태 정의 (백엔드AI 요청 메시지와 동일한 5단계 + 예외 2개)
@@ -167,6 +167,8 @@ def get_status_counts(channel_name=None):
 def batteries_to_table_rows(batteries):
     rows = []
     for b in batteries:
+        _created = b.get("created_at", "")
+        _date = _created[:10] if _created else "—"
         rows.append({
             "VIN": b["vin"] or "—",
             "모델명": b["model_name"] or "—",
@@ -175,6 +177,7 @@ def batteries_to_table_rows(batteries):
             "등급": b["grade"] or "미판정",
             "상태": b["status"],
             "추천업체": b["matched_company"] or "—",
+            "등록 일자": _date,
             "_id": b["id"],
         })
     return rows

@@ -419,11 +419,17 @@ st.markdown(
             min-height: calc(100vh - 32px);
         }
 
-        /* 외관 상태 점검 pills 크기 조정 */
+        /* 외관 상태 점검 pills 크기 조정 — 너비에 맞게 균등 배분 */
+        div[data-testid="stPills"] {
+            display: flex !important;
+            gap: 8px !important;
+        }
         div[data-testid="stPills"] button {
-            padding: 4px 12px !important;
-            font-size: 12px !important;
-            min-height: 30px !important;
+            flex: 1 !important;
+            padding: 6px 8px !important;
+            font-size: 13px !important;
+            min-height: 34px !important;
+            justify-content: center !important;
         }
 
         .sidebar-logo-desc {
@@ -452,9 +458,10 @@ st.markdown(
         }
         .sidebar-logo {
             display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 4px 4px 16px 4px;
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 2px;
+            padding: 8px 4px 16px 4px;
             border-bottom: 1px solid rgba(255,255,255,0.15) !important;
             margin-bottom: 14px;
         }
@@ -470,9 +477,10 @@ st.markdown(
             font-size: 16px;
         }
         .sidebar-logo-text {
-            font-size: 13px;
-            font-weight: 700;
+            font-size: 18px;
+            font-weight: 800;
             color: #ffffff !important;
+            line-height: 1.2;
         }
 
         .sidebar-login-box {
@@ -649,11 +657,8 @@ with st.sidebar:
     st.markdown(
         """
         <div class="sidebar-logo">
-            <div class="sidebar-logo-box">🔋</div>
-            <div>
-                <div class="sidebar-logo-text">Battery Triage Map</div>
-                <div class="sidebar-logo-desc">사용후 배터리 판정 및 매칭 플랫폼</div>
-            </div>
+            <div class="sidebar-logo-text">Battery Triage Map</div>
+            <div class="sidebar-logo-desc">사용후 배터리 판정 및 매칭 플랫폼</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -674,23 +679,6 @@ with st.sidebar:
             if page_key == "intake":
                 st.session_state.step = "input"
             st.rerun()
-
-    # ── 로그인 정보 (맨 아래 고정) ──────────────────
-    user_initial = DUMMY_USER["name"][0]
-    st.markdown(
-        f"""
-        <div class="sidebar-bottom-spacer"></div>
-        <div class="sidebar-divider"></div>
-        <div class="sidebar-login-box">
-            <div class="sidebar-login-avatar">{user_initial}</div>
-            <div>
-                <p class="sidebar-login-name">{DUMMY_USER['name']} 님</p>
-                <p class="sidebar-login-sub">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</p>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
     user_initial = DUMMY_USER["name"][0]
 
 
@@ -748,7 +736,7 @@ def show_battery_detail_dialog(battery_id):
 
     col_s1, col_s2 = st.columns(2)
     with col_s1:
-        if st.button("✅ 상태 변경 적용", use_container_width=True, type="primary"):
+        if st.button("상태 변경 적용", use_container_width=True, type="primary"):
             update_battery_status(detail["id"], new_status)
             st.success(f"상태가 '{new_status}'(으)로 변경되었습니다.")
             st.session_state.show_detail_panel = False
@@ -1027,7 +1015,21 @@ function App() {{
             const id = [...checked][0];
             try {{ window.parent.postMessage({{type:"battery_detail",id}}, "*"); }} catch(e) {{}}
           }},
-        }}, "🔍 상세보기"),
+        }}, "상세보기"),
+        React.createElement("button", {{
+          className:"btn btn-outline",
+          onClick: () => {{
+            const cols = ["VIN","모델명","제조사","용량(kWh)","등급","상태","추천업체","등록 일자"];
+            const csvRows = [cols.join(","), ...filtered.map(r =>
+              cols.map(c => `"${{String(r[c]||"").replace(/"/g,'""')}}"`).join(",")
+            )];
+            const blob = new Blob(["\uFEFF" + csvRows.join("\n")], {{type:"text/csv;charset=utf-8"}});
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = "battery_list.csv";
+            a.click();
+          }},
+        }}, "CSV 다운로드"),
       ),
 
       feedback && React.createElement("div", {{className:"feedback fb-ok"}}, feedback),
@@ -1041,7 +1043,7 @@ function App() {{
               React.createElement("th", null,
                 React.createElement("input", {{type:"checkbox", checked:allChecked, onChange:toggleAll}})
               ),
-              ["VIN","모델명","제조사","용량(kWh)","등급","상태","추천업체"].map(h =>
+              ["VIN","모델명","제조사","용량(kWh)","등급","상태","추천업체","등록 일자"].map(h =>
                 React.createElement("th",{{key:h}},h)
               )
             )
@@ -1063,6 +1065,7 @@ function App() {{
                 React.createElement("td", null, React.createElement(Badge,{{value:row["등급"],map:GRADE_COLOR}})),
                 React.createElement("td", null, React.createElement(Badge,{{value:row["상태"],map:STATUS_COLOR}})),
                 React.createElement("td", null, row["추천업체"]),
+                React.createElement("td", null, React.createElement("span",{{style:{{color:"#6b7280",fontSize:"11px"}}}},row["등록 일자"])),
               )
             )
           )
@@ -1077,8 +1080,8 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
 </html>"""
 
     n_rows = len(batteries) if batteries else 0
-    react_height = min(max(400, 320 + n_rows * 38), 800)
-    components.html(react_html, height=react_height, scrolling=False)
+    react_height = 320 + n_rows * 40
+    components.html(react_html, height=react_height, scrolling=True)
 
     # 상세보기는 기존 Streamlit dialog 활용
     if st.session_state.get("selected_battery_id") and st.session_state.get("show_detail_panel"):
@@ -1308,7 +1311,7 @@ function App() {{
 ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
 </script></body></html>"""
 
-        components.html(_co_html, height=min(120 + len(_co_rows) * 38, 700), scrolling=False)
+        components.html(_co_html, height=120 + len(_co_rows) * 42, scrolling=True)
 
     else:
         st.warning("처리 업체 데이터를 불러오지 못했습니다. data/company_master_v3.csv를 확인해주세요.")
@@ -1560,7 +1563,6 @@ elif st.session_state.page == "intake":
 
         # 03. 외관 상태
         condition_options = ["침수", "누액", "과열", "팽창", "충격"]
-        condition_icons = {"침수": "🌊", "누액": "💧", "과열": "🔥", "팽창": "↔️", "충격": "⚡"}
 
         card03 = st.container(border=True)
         with card03:
@@ -1569,7 +1571,7 @@ elif st.session_state.page == "intake":
             selected_conditions = st.pills(
                 "외관 상태",
                 options=condition_options,
-                format_func=lambda x: f"{condition_icons[x]} {x}",
+                format_func=lambda x: x,
                 selection_mode="multi",
                 label_visibility="collapsed",
                 key="hazard_pills",
@@ -1580,7 +1582,7 @@ elif st.session_state.page == "intake":
 
             num_class = "section-num-alert" if is_alert else ""
             badge_class = "status-badge-alert" if is_alert else "status-badge-ok"
-            badge_text = f"⚠️ 위험요소 {hazard_count}" if is_alert else "🛡️ 이상 없음"
+            badge_text = f"위험요소 {hazard_count}" if is_alert else "이상 없음"
 
             placeholder_header.markdown(
                 f"""
@@ -1984,7 +1986,7 @@ elif st.session_state.page == "intake":
                 st.rerun()
 
         with col3:
-            if st.button("✅ 승인 (최종 확정)", use_container_width=True, type="primary"):
+            if st.button("승인 (최종 확정)", use_container_width=True, type="primary"):
                 st.session_state.step = "completed"
                 st.rerun()
 
@@ -2046,11 +2048,11 @@ elif st.session_state.page == "intake":
             unsafe_allow_html=True,
         )
 
-        st.info("📄 결과서 다운로드는 추후 추가 예정입니다")
+        st.info("결과서 다운로드는 추후 추가 예정입니다")
 
         # PDF 판정 결과서 다운로드
-        st.markdown("#### 📄 판정 결과서 다운로드")
-        if st.button("📥 PDF 결과서 생성", use_container_width=True):
+        st.markdown("#### 판정 결과서 다운로드")
+        if st.button("PDF 결과서 생성", use_container_width=True):
             try:
                 pdf_res = requests.post(
                     f"{API_BASE_URL}/pdf/triage",
@@ -2059,7 +2061,7 @@ elif st.session_state.page == "intake":
                 )
                 if pdf_res.status_code == 200:
                     st.download_button(
-                        label="⬇️ PDF 저장",
+                        label="PDF 저장",
                         data=pdf_res.content,
                         file_name=f"triage_{completion_info['vin']}.pdf",
                         mime="application/pdf",
@@ -2073,7 +2075,7 @@ elif st.session_state.page == "intake":
         # RAG 정책 리포트
         st.markdown("#### 📋 정책 리포트 (AI)")
         st.caption("판정 결과에 맞는 관련 법령·처리 가이드를 AI가 자동 생성합니다. 첫 호출은 약 1~2분 소요될 수 있습니다.")
-        if st.button("🤖 정책 리포트 생성", use_container_width=True):
+        if st.button("정책 리포트 생성", use_container_width=True):
             with st.spinner("AI가 관련 법령 및 정책을 분석 중입니다... (첫 호출 시 최대 2분 소요)"):
                 try:
                     report_res = requests.post(
