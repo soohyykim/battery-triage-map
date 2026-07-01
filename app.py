@@ -1518,6 +1518,61 @@ elif st.session_state.page == "intake":
         )
 
         st.info("📄 결과서 다운로드는 추후 추가 예정입니다")
+
+        # PDF 판정 결과서 다운로드
+        st.markdown("#### 📄 판정 결과서 다운로드")
+        if st.button("📥 PDF 결과서 생성", use_container_width=True):
+            try:
+                pdf_res = requests.post(
+                    f"{API_BASE_URL}/pdf/triage",
+                    json={"triage_result": triage_result},
+                    timeout=30,
+                )
+                if pdf_res.status_code == 200:
+                    st.download_button(
+                        label="⬇️ PDF 저장",
+                        data=pdf_res.content,
+                        file_name=f"triage_{completion_info['vin']}.pdf",
+                        mime="application/pdf",
+                        use_container_width=True,
+                    )
+                else:
+                    st.error(f"PDF 생성 실패: {pdf_res.status_code}")
+            except requests.RequestException as e:
+                st.error(f"PDF 요청 오류: {e}")
+
+        # RAG 정책 리포트
+        st.markdown("#### 📋 정책 리포트 (AI)")
+        st.caption("판정 결과에 맞는 관련 법령·처리 가이드를 AI가 자동 생성합니다. 첫 호출은 약 30~50초 소요될 수 있습니다.")
+        if st.button("🤖 정책 리포트 생성", use_container_width=True):
+            with st.spinner("AI가 관련 법령 및 정책을 분석 중입니다..."):
+                try:
+                    report_res = requests.post(
+                        f"{API_BASE_URL}/report",
+                        json={
+                            "triage_result": triage_result,
+                            "matched_companies": [
+                                {"company_name": c["company_name"], "process_type": c["process_type"]}
+                                for c in matched_companies[:3]
+                            ],
+                        },
+                        timeout=90,
+                    )
+                    if report_res.status_code == 200:
+                        report_data = report_res.json()
+                        st.markdown("---")
+                        st.markdown(report_data.get("report", "리포트를 생성하지 못했습니다."))
+                        sources = report_data.get("sources", [])
+                        if sources:
+                            st.caption("**참조 출처**: " + " / ".join(sources))
+                    elif report_res.status_code == 501:
+                        st.warning("RAG 리포트 기능은 현재 준비 중입니다. (백엔드 구현 예정)")
+                    else:
+                        st.error(f"리포트 생성 실패: {report_res.status_code}")
+                except requests.RequestException as e:
+                    st.error(f"리포트 요청 오류: {e}")
+
+        st.markdown("<br>", unsafe_allow_html=True)
         if st.button("🔄 새 배터리 입력", use_container_width=True):
             st.session_state.step = "input"
             st.session_state.intake_record = None
