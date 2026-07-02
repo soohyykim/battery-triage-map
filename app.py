@@ -96,6 +96,14 @@ st.markdown(
             width: 100% !important;
             max-width: 100% !important;
         }
+        /* folium 지도(st_folium), components.html 커스텀 컴포넌트는 iframe으로
+           렌더링되는데, Streamlit이 iframe 크기를 리사이즈 스크립트로 JS에서
+           직접 다시 계산해서 박아넣는다. 이것도 카드 padding을 감안 못하고
+           카드보다 넓게 잡혀서 오른쪽으로 튀어나오므로 동일하게 강제 보정. */
+        div[class*="st-key-card_"] iframe {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
 
         :root {
             --c-background: #f6f9fb;
