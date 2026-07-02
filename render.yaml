@@ -1,9 +1,9 @@
-services:
+﻿services:
   - type: web
     name: battery-triage-map-api
     runtime: python
     plan: free
-    branch: feat/api-rag-pdf
+    branch: main
     buildCommand: "pip install -r requirements.txt"
     startCommand: "uvicorn api.main:app --host 0.0.0.0 --port $PORT"
     envVars:

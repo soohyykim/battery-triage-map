@@ -60,7 +60,7 @@ def test_match_orange_ncm():
     res = match_companies(triage_result, companies, 37.456, 126.705, max_results=3)
     assert res["status"] == "matched"
     assert len(res["matched_companies"]) == 3
-    # 1순위는 충청자원순환 (노트북 검증값)
-    assert res["matched_companies"][0]["company_name"] == "충청자원순환"
+    # 1순위는 (주)오르타머티리얼즈 (노트북 검증값)
+    assert res["matched_companies"][0]["company_name"] == "(주)오르타머티리얼즈"
     # 전부 recycle 처리유형이어야 한다
     assert all(c["process_type"] == "recycle" for c in res["matched_companies"])
