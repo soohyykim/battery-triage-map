@@ -127,7 +127,7 @@ st.markdown(
         /* 전체 화면 폭 사용 (모바일 제한 해제) */
         .block-container {
             max-width: 1200px !important;
-            padding-top: 3rem !important;
+            padding-top: 1rem !important;
             padding-left: 0px !important;
             padding-right: 0px !important;
         }
@@ -596,10 +596,10 @@ st.markdown(
             cursor: not-allowed;
         }
         section[data-testid="stSidebar"] > div:first-child {
-            padding-top: 1rem !important;
+            padding-top: 0rem !important;
         }
         section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
-            padding-top: 1rem !important;
+            padding-top: 0rem !important;
         }
         .sidebar-logo {
             display: flex;
