@@ -54,6 +54,28 @@ st.markdown(
     <style>
         @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
 
+        /* Streamlit 기본 상단 메뉴(햄버거)·헤더 툴바·"Made with Streamlit" 푸터
+           숨김. 이 요소들은 앱 자체 DOM 안에 있어서 CSS로 제어 가능하다
+           (Streamlit Cloud 소유자 화면에 뜨는 Share/Deploy 바는 호스팅
+           플랫폼이 앱 iframe 바깥에 얹는 것이라 여기서 숨길 수 없다 —
+           일반 방문자에게는 애초에 안 보인다). */
+        #MainMenu {
+            visibility: hidden;
+        }
+        footer {
+            visibility: hidden;
+        }
+        header[data-testid="stHeader"] {
+            visibility: hidden;
+            height: 0;
+        }
+        [data-testid="stToolbar"],
+        [data-testid="stDecoration"],
+        [data-testid="stStatusWidget"] {
+            visibility: hidden;
+            display: none;
+        }
+
         /* 전역 box-sizing 리셋 — padding/border가 지정한 width에 "더해지는" 게
            아니라 "포함"되도록 강제. 이게 없으면 padding·border가 있는 요소들
            (QR 스캔 박스, 뱃지 등)이 카드 padding을 감안 못하고 카드 밖으로
@@ -105,7 +127,7 @@ st.markdown(
         /* 전체 화면 폭 사용 (모바일 제한 해제) */
         .block-container {
             max-width: 1200px !important;
-            padding-top: 1rem !important;
+            padding-top: 3rem !important;
             padding-left: 0px !important;
             padding-right: 0px !important;
         }
@@ -1322,156 +1344,158 @@ elif st.session_state.page == "company":
         )
 
         # ── 지도 ────────────────────────────────────
-        st.markdown("**처리 업체 위치 지도**")
+        with st.container(border=False, key="card_company_map"):
+            st.markdown("**처리 업체 위치 지도**")
 
-        _center_lat = _df_co["latitude"].mean()
-        _center_lon = _df_co["longitude"].mean()
-        _m = folium.Map(
-            location=[_center_lat, _center_lon],
-            zoom_start=7,
-            tiles="CartoDB positron",
-        )
+            _center_lat = _df_co["latitude"].mean()
+            _center_lon = _df_co["longitude"].mean()
+            _m = folium.Map(
+                location=[_center_lat, _center_lon],
+                zoom_start=7,
+                tiles="CartoDB positron",
+            )
 
-        for _, row in _df_co.iterrows():
-            if pd.isna(row["latitude"]) or pd.isna(row["longitude"]):
-                continue
-            _color = {"reuse": "green", "recycle": "orange", "designated_waste": "red"}.get(row["process_type"], "gray")
-            folium.CircleMarker(
-                location=[row["latitude"], row["longitude"]],
-                radius=8,
-                color=_color,
-                fill=True,
-                fill_color=_color,
-                fill_opacity=0.8,
-                popup=folium.Popup(
-                    f"""<b>{row['company_name']}</b><br>
-                    유형: {PROCESS_LABEL.get(row['process_type'], row['process_type'])}<br>
-                    지역: {row['region']}<br>
-                    월 처리: {int(row['monthly_capacity_count'])}건<br>
-                    주소: {row['address']}""",
-                    max_width=260,
-                ),
-                tooltip=row["company_name"],
-            ).add_to(_m)
+            for _, row in _df_co.iterrows():
+                if pd.isna(row["latitude"]) or pd.isna(row["longitude"]):
+                    continue
+                _color = {"reuse": "green", "recycle": "orange", "designated_waste": "red"}.get(row["process_type"], "gray")
+                folium.CircleMarker(
+                    location=[row["latitude"], row["longitude"]],
+                    radius=8,
+                    color=_color,
+                    fill=True,
+                    fill_color=_color,
+                    fill_opacity=0.8,
+                    popup=folium.Popup(
+                        f"""<b>{row['company_name']}</b><br>
+                        유형: {PROCESS_LABEL.get(row['process_type'], row['process_type'])}<br>
+                        지역: {row['region']}<br>
+                        월 처리: {int(row['monthly_capacity_count'])}건<br>
+                        주소: {row['address']}""",
+                        max_width=260,
+                    ),
+                    tooltip=row["company_name"],
+                ).add_to(_m)
 
-        # 범례
-        _legend = """
-        <div style="position:fixed; bottom:20px; left:20px; background:white;
-             padding:10px 14px; border-radius:8px; border:1px solid #e5e7eb;
-             font-size:12px; z-index:999; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
-            <div style="font-weight:700; margin-bottom:6px; color:#1a2e44;">처리 유형</div>
-            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-                <div style="width:12px;height:12px;border-radius:50%;background:#2e9e5b;"></div> 재사용
+            # 범례
+            _legend = """
+            <div style="position:fixed; bottom:20px; left:20px; background:white;
+                 padding:10px 14px; border-radius:8px; border:1px solid #e5e7eb;
+                 font-size:12px; z-index:999; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+                <div style="font-weight:700; margin-bottom:6px; color:#1a2e44;">처리 유형</div>
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                    <div style="width:12px;height:12px;border-radius:50%;background:#2e9e5b;"></div> 재사용
+                </div>
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                    <div style="width:12px;height:12px;border-radius:50%;background:#f3821d;"></div> 재활용
+                </div>
+                <div style="display:flex; align-items:center; gap:6px;">
+                    <div style="width:12px;height:12px;border-radius:50%;background:#e62d28;"></div> 지정폐기물
+                </div>
             </div>
-            <div style="display:flex; align-items:center; gap:6px; margin-bottom:4px;">
-                <div style="width:12px;height:12px;border-radius:50%;background:#f3821d;"></div> 재활용
-            </div>
-            <div style="display:flex; align-items:center; gap:6px;">
-                <div style="width:12px;height:12px;border-radius:50%;background:#e62d28;"></div> 지정폐기물
-            </div>
-        </div>
-        """
-        _m.get_root().html.add_child(folium.Element(_legend))
-        st_folium(_m, width="100%", height=420, returned_objects=[])
+            """
+            _m.get_root().html.add_child(folium.Element(_legend))
+            st_folium(_m, width="100%", height=420, returned_objects=[])
 
         # ── 업체 리스트 (React) ──────────────────────
-        st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
-        st.markdown("**처리 업체 목록**")
+        with st.container(border=False, key="card_company_list"):
+            st.markdown("<div style='height:12px'></div>", unsafe_allow_html=True)
+            st.markdown("**처리 업체 목록**")
 
-        _co_rows = []
-        for _, row in _df_co.iterrows():
-            _co_rows.append({
-                "company_name": row["company_name"],
-                "region": row["region"],
-                "process_type": PROCESS_LABEL.get(row["process_type"], row["process_type"]),
-                "accepted_grade": row["accepted_grade"],
-                "monthly_capacity_count": int(row["monthly_capacity_count"]),
-                "address": row["address"],
-            })
+            _co_rows = []
+            for _, row in _df_co.iterrows():
+                _co_rows.append({
+                    "company_name": row["company_name"],
+                    "region": row["region"],
+                    "process_type": PROCESS_LABEL.get(row["process_type"], row["process_type"]),
+                    "accepted_grade": row["accepted_grade"],
+                    "monthly_capacity_count": int(row["monthly_capacity_count"]),
+                    "address": row["address"],
+                })
 
-        PROCESS_COLOR_JS = _json.dumps({"재사용": "#2e9e5b", "재활용": "#f3821d", "지정폐기물": "#e62d28"})
-        CO_ROWS_JS = _json.dumps(_co_rows)
+            PROCESS_COLOR_JS = _json.dumps({"재사용": "#2e9e5b", "재활용": "#f3821d", "지정폐기물": "#e62d28"})
+            CO_ROWS_JS = _json.dumps(_co_rows)
 
-        _co_html = f"""<!DOCTYPE html>
-<html><head><meta charset="utf-8"/>
-<script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
-<script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-<style>
-* {{ box-sizing:border-box; margin:0; padding:0; }}
-body {{ font-family:'Malgun Gothic','Segoe UI',sans-serif; font-size:13px; background:#f0f2f6; }}
-.wrap {{ background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }}
-.filter-bar {{ display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid #f1f5f9; }}
-.filter-bar input, .filter-bar select {{
-    height:30px; border:1px solid #d1d5db; border-radius:6px;
-    padding:0 8px; font-size:12px; background:#f9fafb; outline:none;
-}}
-.filter-bar input {{ width:180px; }}
-.filter-bar select {{ width:110px; }}
-.info {{ font-size:12px; color:#6b7280; margin-right:auto; }}
-table {{ width:100%; border-collapse:collapse; }}
-thead tr {{ background:#f8fafc; }}
-th {{ padding:9px 10px; text-align:left; font-size:11px; font-weight:700; color:#6b7280; border-bottom:2px solid #e5e7eb; white-space:nowrap; }}
-tbody tr {{ border-bottom:1px solid #f1f5f9; transition:background 0.1s; cursor:default; }}
-tbody tr:hover {{ background:#f8fafc; }}
-td {{ padding:9px 10px; font-size:12px; color:#374151; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:260px; }}
-.badge {{ display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:700; color:#fff; }}
-.empty {{ padding:32px; text-align:center; color:#9ca3af; }}
-</style></head><body>
-<div id="root"></div>
-<script>
-const {{ useState, useMemo }} = React;
-const PROCESS_COLOR = {PROCESS_COLOR_JS};
-const ALL_ROWS = {CO_ROWS_JS};
+            _co_html = f"""<!DOCTYPE html>
+    <html><head><meta charset="utf-8"/>
+    <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <style>
+    * {{ box-sizing:border-box; margin:0; padding:0; }}
+    body {{ font-family:'Malgun Gothic','Segoe UI',sans-serif; font-size:13px; background:#f0f2f6; }}
+    .wrap {{ background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }}
+    .filter-bar {{ display:flex; align-items:center; gap:8px; padding:10px 14px; border-bottom:1px solid #f1f5f9; }}
+    .filter-bar input, .filter-bar select {{
+        height:30px; border:1px solid #d1d5db; border-radius:6px;
+        padding:0 8px; font-size:12px; background:#f9fafb; outline:none;
+    }}
+    .filter-bar input {{ width:180px; }}
+    .filter-bar select {{ width:110px; }}
+    .info {{ font-size:12px; color:#6b7280; margin-right:auto; }}
+    table {{ width:100%; border-collapse:collapse; }}
+    thead tr {{ background:#f8fafc; }}
+    th {{ padding:9px 10px; text-align:left; font-size:11px; font-weight:700; color:#6b7280; border-bottom:2px solid #e5e7eb; white-space:nowrap; }}
+    tbody tr {{ border-bottom:1px solid #f1f5f9; transition:background 0.1s; cursor:default; }}
+    tbody tr:hover {{ background:#f8fafc; }}
+    td {{ padding:9px 10px; font-size:12px; color:#374151; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:260px; }}
+    .badge {{ display:inline-block; padding:2px 10px; border-radius:999px; font-size:11px; font-weight:700; color:#fff; }}
+    .empty {{ padding:32px; text-align:center; color:#9ca3af; }}
+    </style></head><body>
+    <div id="root"></div>
+    <script>
+    const {{ useState, useMemo }} = React;
+    const PROCESS_COLOR = {PROCESS_COLOR_JS};
+    const ALL_ROWS = {CO_ROWS_JS};
 
-function App() {{
-    const [q, setQ] = useState("");
-    const [pt, setPt] = useState("전체");
+    function App() {{
+        const [q, setQ] = useState("");
+        const [pt, setPt] = useState("전체");
 
-    const filtered = useMemo(() => ALL_ROWS.filter(r => {{
-        const qOk = !q || r.company_name.includes(q) || r.region.includes(q) || r.address.includes(q);
-        const ptOk = pt === "전체" || r.process_type === pt;
-        return qOk && ptOk;
-    }}), [q, pt]);
+        const filtered = useMemo(() => ALL_ROWS.filter(r => {{
+            const qOk = !q || r.company_name.includes(q) || r.region.includes(q) || r.address.includes(q);
+            const ptOk = pt === "전체" || r.process_type === pt;
+            return qOk && ptOk;
+        }}), [q, pt]);
 
-    return React.createElement("div", {{className:"wrap"}},
-        React.createElement("div", {{className:"filter-bar"}},
-            React.createElement("span", {{className:"info"}}, `전체 ${{filtered.length}}개 업체`),
-            React.createElement("input", {{type:"text", placeholder:"업체명·지역·주소 검색", value:q, onChange:e=>setQ(e.target.value)}}),
-            React.createElement("select", {{value:pt, onChange:e=>setPt(e.target.value)}},
-                ["전체","재사용","재활용","지정폐기물"].map(v => React.createElement("option",{{key:v,value:v}},v))
-            ),
-        ),
-        filtered.length === 0
-            ? React.createElement("div",{{className:"empty"}},"검색 결과가 없습니다.")
-            : React.createElement("table", null,
-                React.createElement("thead", null,
-                    React.createElement("tr", null,
-                        ["업체명","지역","처리 유형","허용 등급","월 처리 용량","주소"].map(h =>
-                            React.createElement("th",{{key:h}},h)
-                        )
-                    )
+        return React.createElement("div", {{className:"wrap"}},
+            React.createElement("div", {{className:"filter-bar"}},
+                React.createElement("span", {{className:"info"}}, `전체 ${{filtered.length}}개 업체`),
+                React.createElement("input", {{type:"text", placeholder:"업체명·지역·주소 검색", value:q, onChange:e=>setQ(e.target.value)}}),
+                React.createElement("select", {{value:pt, onChange:e=>setPt(e.target.value)}},
+                    ["전체","재사용","재활용","지정폐기물"].map(v => React.createElement("option",{{key:v,value:v}},v))
                 ),
-                React.createElement("tbody", null,
-                    filtered.map((row,i) =>
-                        React.createElement("tr", {{key:i}},
-                            React.createElement("td", null, React.createElement("b",null,row.company_name)),
-                            React.createElement("td", null, row.region),
-                            React.createElement("td", null,
-                                React.createElement("span",{{className:"badge", style:{{backgroundColor:PROCESS_COLOR[row.process_type]||"#9aa5b1"}}}}, row.process_type)
-                            ),
-                            React.createElement("td", null, row.accepted_grade),
-                            React.createElement("td", null, `${{row.monthly_capacity_count}}건/월`),
-                            React.createElement("td", null, React.createElement("span",{{style:{{color:"#6b7280",fontSize:"11px"}}}},row.address)),
+            ),
+            filtered.length === 0
+                ? React.createElement("div",{{className:"empty"}},"검색 결과가 없습니다.")
+                : React.createElement("table", null,
+                    React.createElement("thead", null,
+                        React.createElement("tr", null,
+                            ["업체명","지역","처리 유형","허용 등급","월 처리 용량","주소"].map(h =>
+                                React.createElement("th",{{key:h}},h)
+                            )
+                        )
+                    ),
+                    React.createElement("tbody", null,
+                        filtered.map((row,i) =>
+                            React.createElement("tr", {{key:i}},
+                                React.createElement("td", null, React.createElement("b",null,row.company_name)),
+                                React.createElement("td", null, row.region),
+                                React.createElement("td", null,
+                                    React.createElement("span",{{className:"badge", style:{{backgroundColor:PROCESS_COLOR[row.process_type]||"#9aa5b1"}}}}, row.process_type)
+                                ),
+                                React.createElement("td", null, row.accepted_grade),
+                                React.createElement("td", null, `${{row.monthly_capacity_count}}건/월`),
+                                React.createElement("td", null, React.createElement("span",{{style:{{color:"#6b7280",fontSize:"11px"}}}},row.address)),
+                            )
                         )
                     )
                 )
-            )
-    );
-}}
-ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
-</script></body></html>"""
+        );
+    }}
+    ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+    </script></body></html>"""
 
-        components.html(_co_html, height=80 + len(_co_rows) * 44, scrolling=False)
+            components.html(_co_html, height=80 + len(_co_rows) * 44, scrolling=False)
 
     else:
         st.warning("처리 업체 데이터를 불러오지 못했습니다. data/companies_mock.csv를 확인해주세요.")
