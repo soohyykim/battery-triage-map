@@ -38,6 +38,7 @@ from api.schemas import (
     ApproveRequest,
     PdfTriageRequest,
     PdfMatchRequest,
+    HistoryDeleteRequest,
 )
 from services import triage as triage_svc
 from services import matching as matching_svc
@@ -256,6 +257,27 @@ def approve(triage_id: int, req: ApproveRequest):
     if not ok:
         raise HTTPException(status_code=404, detail=f"triage_id={triage_id} 이력 없음")
     return {"status": "approved", "triage_id": triage_id, "approved_by": req.approved_by}
+
+
+# ---------------------------------------------------------------------------
+# DELETE /history/{triage_id}  - 판정 이력 단건 삭제 (배터리 관리 페이지)
+# ---------------------------------------------------------------------------
+@app.delete("/history/{triage_id}", tags=["history"])
+def delete_history(triage_id: int):
+    ok = db_svc.delete_triage(triage_id)
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"triage_id={triage_id} 이력 없음")
+    return {"status": "deleted", "triage_id": triage_id}
+
+
+# ---------------------------------------------------------------------------
+# POST /history/delete  - 판정 이력 여러 건 일괄 삭제 (체크박스 선택 삭제)
+# 다건 삭제라 REST상 DELETE에 바디를 싣는 것보다 POST가 더 안전하게 지원됨
+# ---------------------------------------------------------------------------
+@app.post("/history/delete", tags=["history"])
+def delete_history_bulk(req: HistoryDeleteRequest):
+    deleted_ids = db_svc.delete_triage_bulk(req.triage_ids)
+    return {"status": "deleted", "deleted_ids": deleted_ids, "count": len(deleted_ids)}
 
 
 # ---------------------------------------------------------------------------

@@ -188,6 +188,11 @@ class ApproveRequest(BaseModel):
     approved_by: str = Field(..., description="승인 담당자 이름/ID")
 
 
+class HistoryDeleteRequest(BaseModel):
+    """POST /history/delete 요청 바디 — 일괄 삭제할 triage_history id 목록."""
+    triage_ids: List[int] = Field(..., description="삭제할 triage_history id 목록")
+
+
 # ---------------------------------------------------------------------------
 # POST /pdf/*  -> PDF 발급 (판정 결과서 · 매칭 확인서)
 # ---------------------------------------------------------------------------

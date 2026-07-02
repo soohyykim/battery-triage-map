@@ -25,7 +25,7 @@ from typing import Any, Optional
 
 from sqlalchemy import (
     Column, DateTime, Float, Integer, MetaData, String, Table,
-    create_engine, func, insert, select, update,
+    create_engine, delete, func, insert, select, update,
 )
 from sqlalchemy.engine import Engine, Row
 
@@ -267,3 +267,38 @@ def approve_triage(triage_id: int, approver: str) -> bool:
     )
     with get_engine().begin() as conn:
         return conn.execute(stmt).rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# 삭제 (배터리 관리 페이지 — 선택 삭제)
+# ---------------------------------------------------------------------------
+def delete_triage(triage_id: int) -> bool:
+    """
+    판정 이력 1건 삭제. 연결된 match_history 행도 함께 지운다(외래키 제약은
+    없지만 고아 행이 남지 않도록). 대상이 있어서 실제로 지웠으면 True.
+    """
+    with get_engine().begin() as conn:
+        conn.execute(delete(match_history).where(match_history.c.triage_id == triage_id))
+        result = conn.execute(delete(triage_history).where(triage_history.c.id == triage_id))
+        return result.rowcount > 0
+
+
+def delete_triage_bulk(triage_ids: list[int]) -> list[int]:
+    """
+    판정 이력 여러 건 일괄 삭제. 실제로 존재해서 삭제된 id 목록을 반환한다
+    (존재하지 않는 id는 조용히 건너뜀). 마찬가지로 연결된 match_history도 함께 지운다.
+    """
+    if not triage_ids:
+        return []
+    with get_engine().begin() as conn:
+        existing = [
+            row[0]
+            for row in conn.execute(
+                select(triage_history.c.id).where(triage_history.c.id.in_(triage_ids))
+            )
+        ]
+        if not existing:
+            return []
+        conn.execute(delete(match_history).where(match_history.c.triage_id.in_(existing)))
+        conn.execute(delete(triage_history).where(triage_history.c.id.in_(existing)))
+        return existing

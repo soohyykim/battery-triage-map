@@ -964,6 +964,8 @@ body {{ font-family:'Malgun Gothic','Segoe UI',sans-serif; font-size:13px; backg
 .btn-teal:hover:not(:disabled) {{ background:#006b71; }}
 .btn-outline {{ background:#fff; color:#374151; border:1px solid #d1d5db; }}
 .btn-outline:hover:not(:disabled) {{ background:#f3f4f6; }}
+.btn-danger {{ background:#fff; color:#dc2626; border:1px solid #f3c6c6; }}
+.btn-danger:hover:not(:disabled) {{ background:#fef2f2; }}
 .st-sel {{ height:32px; border:1px solid #d1d5db; border-radius:6px;
   padding:0 8px; font-size:12px; background:#f9fafb; outline:none; }}
 
@@ -1041,13 +1043,14 @@ input[type=checkbox] {{ width:14px; height:14px; cursor:pointer; accent-color:#0
   <div class="bulk-bar">
     <span class="info" id="sel-info">전체</span>
     <select class="st-sel" id="bulk-sel" disabled></select>
+    <button class="btn btn-danger" id="delete-btn" disabled>선택 삭제</button>
   </div>
   <div class="feedback" id="fb" style="display:none"></div>
   <table>
     <thead><tr>
       <th><input type="checkbox" id="chk-all"/></th>
-      <th>등록일자</th><th>접수번호</th><th>VIN</th><th>모델명</th><th>제조사</th>
-      <th>용량(kWh)</th><th>발생채널</th><th>등급</th><th>상태</th><th>추천업체</th>
+      <th>접수번호</th><th>VIN</th><th>모델명</th><th>제조사</th>
+      <th>용량(kWh)</th><th>등급</th><th>상태</th><th>추천업체</th>
     </tr></thead>
     <tbody id="tbody"></tbody>
   </table>
@@ -1059,6 +1062,7 @@ const GC = {GRADE_COLOR_JS};
 const SO = {STATUS_OPTIONS_JS};
 const GO = {GRADE_OPTIONS_JS};
 const BS = {BULK_STATUS_JS};
+const API_BASE = "{API_BASE_URL}";
 let allRows = {ROWS_JS};
 let filtered = [...allRows];
 let checked = new Set();
@@ -1116,8 +1120,46 @@ function applyBulk(status) {{
   feedbackTimer = setTimeout(() => {{ fb.style.display="none"; }}, 3000);
 }}
 
+async function deleteSelected() {{
+  if (!checked.size) return;
+  const ids = [...checked];
+  if (!confirm(`선택한 ${{ids.length}}건을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.`)) return;
+
+  const btn = document.getElementById("delete-btn");
+  btn.disabled = true;
+  btn.textContent = "삭제 중...";
+
+  let deletedIds = [];
+  try {{
+    const res = await fetch(`${{API_BASE}}/history/delete`, {{
+      method: "POST",
+      headers: {{ "Content-Type": "application/json" }},
+      body: JSON.stringify({{ triage_ids: ids }}),
+    }});
+    if (!res.ok) throw new Error(`HTTP ${{res.status}}`);
+    const data = await res.json();
+    deletedIds = data.deleted_ids || [];
+  }} catch (e) {{
+    alert(`삭제 요청에 실패했습니다: ${{e}}`);
+    btn.textContent = "선택 삭제";
+    render();
+    return;
+  }}
+
+  allRows = allRows.filter(r => !deletedIds.includes(r._id));
+  checked.clear();
+  applyFilter();
+
+  const fb = document.getElementById("fb");
+  fb.textContent = `${{deletedIds.length}}건 삭제 완료`;
+  fb.style.display = "block";
+  if (feedbackTimer) clearTimeout(feedbackTimer);
+  feedbackTimer = setTimeout(() => {{ fb.style.display="none"; }}, 3000);
+  btn.textContent = "선택 삭제";
+}}
+
 function downloadCSV() {{
-  const cols = ["등록일자","접수번호","VIN","모델명","제조사","용량(kWh)","발생채널","등급","상태","추천업체"];
+  const cols = ["접수번호","VIN","모델명","제조사","용량(kWh)","등급","상태","추천업체"];
   const rows = [cols.join(","), ...filtered.map(r => {{
     const withReceipt = Object.assign({{}}, r, {{"접수번호": receiptNo(r)}});
     return cols.map(c => `"${{String(withReceipt[c]||"").replace(/"/g,'""')}}"`).join(",");
@@ -1136,23 +1178,22 @@ function render() {{
   document.getElementById("count-num").textContent = filtered.length;
   document.getElementById("sel-info").textContent = n > 0 ? `${{n}}건 선택` : "전체";
   document.getElementById("bulk-sel").disabled = n === 0;
+  document.getElementById("delete-btn").disabled = n === 0;
 
   const tbody = document.getElementById("tbody");
   if (filtered.length === 0) {{
-    tbody.innerHTML = `<tr><td colspan="11" class="empty">조건에 맞는 배터리가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="9" class="empty">조건에 맞는 배터리가 없습니다.</td></tr>`;
   }} else {{
     tbody.innerHTML = filtered.map(r => `
       <tr class="${{checked.has(r._id) ? 'sel' : ''}}" onclick="toggleRow(${{r._id}})">
         <td onclick="event.stopPropagation()">
           <input type="checkbox" ${{checked.has(r._id)?'checked':''}} onchange="toggleRow(${{r._id}})"/>
         </td>
-        <td>${{r["등록일자"]||'—'}}</td>
         <td class="receipt-no">${{receiptNo(r)}}</td>
         <td>${{r.VIN||'—'}}</td>
         <td>${{r['모델명']||'—'}}</td>
         <td>${{r['제조사']||'—'}}</td>
         <td>${{r['용량(kWh)'] != null && r['용량(kWh)'] !== '—' ? Number(r['용량(kWh)']).toFixed(1) : '—'}}</td>
-        <td>${{r['발생채널']||'—'}}</td>
         <td>${{badge(r['등급'], GC)}}</td>
         <td>${{badge(r['상태'], SC)}}</td>
         <td>${{r['추천업체']||'—'}}</td>
@@ -1191,6 +1232,7 @@ window.onload = function() {{
     applyFilter();
   }};
   document.getElementById("csv-btn").onclick = downloadCSV;
+  document.getElementById("delete-btn").onclick = deleteSelected;
   document.getElementById("chk-all").onchange = toggleAll;
   render();
 }};
@@ -1500,11 +1542,7 @@ elif st.session_state.page == "settings":
             """,
             unsafe_allow_html=True,
         )
-        d1, d2 = st.columns(2)
-        with d1:
-            st.selectbox("언어", ["한국어", "English"], index=0, key="lang_select")
-        with d2:
-            st.selectbox("배터리 관리 목록 기본 정렬", ["등록일 최신순", "등록일 오래된순", "등급순"], index=0, key="sort_select")
+        st.selectbox("언어", ["한국어", "English"], index=0, key="lang_select")
 
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
     if st.button("로그아웃", use_container_width=True, type="primary", key="settings_logout_stub"):

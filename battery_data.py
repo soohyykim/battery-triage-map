@@ -20,7 +20,7 @@ import streamlit as st
 # ---------------------------------------------------------------------------
 # 백엔드 API 주소
 # ---------------------------------------------------------------------------
-API_BASE_URL = os.environ.get("API_BASE_URL", "https://battery-triage-map-api-ve2w.onrender.com")
+API_BASE_URL = os.environ.get("API_BASE_URL", "https://battery-triage-map-api.onrender.com")
 
 # ---------------------------------------------------------------------------
 # 상태 정의 (백엔드AI 요청 메시지와 동일한 5단계 + 예외 2개)
@@ -150,6 +150,32 @@ def update_battery_status(battery_id, new_status, note=""):
     overrides = _status_overrides()
     overrides[battery_id] = new_status
     return True
+
+
+def delete_battery(battery_id):
+    """배터리 판정 이력 1건 삭제. 성공하면 True."""
+    try:
+        res = requests.delete(f"{API_BASE_URL}/history/{battery_id}", timeout=10)
+        res.raise_for_status()
+        return True
+    except requests.RequestException as e:
+        st.error(f"삭제에 실패했습니다: {e}")
+        return False
+
+
+def delete_batteries_bulk(battery_ids):
+    """배터리 판정 이력 여러 건 일괄 삭제. 실제로 삭제된 id 리스트를 반환."""
+    try:
+        res = requests.post(
+            f"{API_BASE_URL}/history/delete",
+            json={"triage_ids": list(battery_ids)},
+            timeout=15,
+        )
+        res.raise_for_status()
+        return res.json().get("deleted_ids", [])
+    except requests.RequestException as e:
+        st.error(f"일괄 삭제에 실패했습니다: {e}")
+        return []
 
 
 def get_channel_list():
