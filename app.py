@@ -54,6 +54,27 @@ st.markdown(
     <style>
         @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css');
 
+        /* 전역 box-sizing 리셋 — padding/border가 지정한 width에 "더해지는" 게
+           아니라 "포함"되도록 강제. 이게 없으면 padding·border가 있는 요소들
+           (QR 스캔 박스, 뱃지 등)이 카드 padding을 감안 못하고 카드 밖으로
+           삐져나온다. */
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+
+        /* Streamlit 1.40.0에서 확인된 실제 버그: 위젯 wrapper(.stMarkdown,
+           stRadio, stToggle 등 data-testid를 가진 여러 요소들)에 렌더링
+           시점의 고정 px 값을 인라인 style="width: ...px"로 박아넣는데, 이
+           값이 카드 padding을 감안하지 않은 더 넓은 조상 기준으로 계산돼서
+           카드보다 넓게 나온다(QR 스캔 박스·"이상 없음" 뱃지·라디오 버튼·
+           토글 스위치 등이 카드 밖으로 튀어나오는 진짜 원인). stElementContainer
+           는 항상 올바른 폭으로 계산되므로, 그 바로 아래 자식 전체를 강제로
+           100%로 되돌린다. 스타일시트의 !important는 인라인 style보다 우선한다. */
+        div[class*="st-key-card_"] [data-testid="stElementContainer"] > div {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
         :root {
             --c-background: #f6f9fb;
             --c-foreground: #0b1c2c;
@@ -130,6 +151,56 @@ st.markdown(
             align-items: center;
             gap: 10px;
             min-width: 0;
+        }
+        /* 배터리 관리 페이지용 화이트 헤더 (신규 목록 디자인 기준) */
+        .list-header {
+            background-color: var(--c-card);
+            border: 1.5px solid var(--c-border);
+            border-radius: 14px;
+            padding: 0 18px;
+            height: 62px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 1rem;
+            width: 100%;
+            z-index: 999;
+            margin-bottom: 16px;
+        }
+        .list-header-left {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .list-header-title {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--c-foreground);
+            margin: 0;
+            line-height: 1.3;
+        }
+        .list-header-sub {
+            font-size: 12px;
+            color: var(--c-muted-foreground);
+            margin: 2px 0 0 0;
+            line-height: 1.3;
+        }
+        .list-header-user {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 2px;
+        }
+        .list-header-user-name {
+            color: var(--c-foreground);
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .list-header-user-channel {
+            color: var(--c-muted-foreground);
+            font-size: 10px;
         }
         .triage-logo-box {
             background-color: rgba(0,181,181,0.20);
@@ -216,13 +287,17 @@ st.markdown(
             justify-content: space-between;
             margin-bottom: 12px;
             gap: 10px;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         }
         .section-title-left {
             display: flex;
             align-items: center;
             gap: 8px;
             min-width: 0;
-            flex: 1;
+            flex: 1 1 auto;
+            overflow: hidden;
         }
         .section-num {
             background-color: var(--c-primary);
@@ -236,6 +311,7 @@ st.markdown(
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
         }
         .section-num-alert {
             background-color: var(--c-warning);
@@ -247,6 +323,9 @@ st.markdown(
             color: var(--c-foreground);
             margin: 0;
             word-break: keep-all;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .section-desc {
             color: var(--c-muted-foreground);
@@ -264,6 +343,8 @@ st.markdown(
             padding: 4px 10px;
             border-radius: 999px;
             white-space: nowrap;
+            flex-shrink: 0;
+            box-sizing: border-box;
         }
         .status-badge-ok {
             background-color: var(--c-secondary);
@@ -336,37 +417,46 @@ st.markdown(
             color: var(--c-primary-foreground);
         }
 
-        /* pills — 외관 상태 점검 (침수/누액/과열/팽창/충격) 5개 버튼을
-           카드 너비에 꽉 차게 균등 분배. data-testid 기반 선택자에 더해,
-           위젯의 key(hazard_pills)로 생성되는 .st-key-hazard_pills 클래스도
-           함께 타겟팅해서 Streamlit 버전별 내부 DOM 차이에 대응 */
-        div[data-testid="stPills"],
-        .st-key-hazard_pills div[role="radiogroup"],
-        .st-key-hazard_pills > div > div {
-            display: flex !important;
+        /* pills — 외관 상태 점검 (침수/누액/과열/팽창/충격) 5개 버튼.
+           실제 렌더링 DOM을 Playwright로 직접 확인해서 알아낸 진짜 구조:
+           .st-key-hazard_pills 안의 div[data-baseweb="button-group"][role="group"]
+           가 버튼들을 감싸는 진짜 컨테이너다. 그리고 버튼을 선택하면 Streamlit이
+           data-testid를 "stBaseButton-pills"에서 "stBaseButton-pillsActive"로
+           통째로 바꿔버린다(aria-checked는 안 씀) — 그래서 선택 전용 testid를
+           빼먹으면 선택 순간 스타일이 통째로 날아가 버튼이 찌그러진다.
+           [data-testid^="stBaseButton-pills"]로 두 testid를 한 번에 잡는다. */
+        .st-key-hazard_pills {
             width: 100% !important;
+            max-width: 100% !important;
+        }
+        .st-key-hazard_pills div[data-baseweb="button-group"] {
+            display: grid !important;
+            grid-template-columns: repeat(5, 1fr) !important;
+            width: 66.7% !important;
+            max-width: 66.7% !important;
+            flex-wrap: nowrap !important;
             gap: 8px !important;
         }
-        div[data-testid="stPills"] label,
-        div[data-testid="stPills"] button,
-        .st-key-hazard_pills label,
-        .st-key-hazard_pills button {
-            flex: 1 1 0 !important;
-            width: auto !important;
-            min-height: 34px !important;
+        .st-key-hazard_pills button[data-testid^="stBaseButton-pills"] {
+            width: 100% !important;
+            aspect-ratio: 4 / 3 !important;
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
             border: 1.5px solid var(--c-border) !important;
-            border-radius: 10px !important;
-            padding: 12px 4px !important;
-            font-size: 13px !important;
+            border-radius: 14px !important;
+            padding: 6px !important;
+            font-size: 14px !important;
+            font-weight: 600 !important;
             background-color: var(--c-card) !important;
+            display: flex !important;
+            align-items: center !important;
             justify-content: center !important;
             text-align: center !important;
+            box-sizing: border-box !important;
             transition: all 0.15s ease;
         }
-        div[data-testid="stPills"] label[aria-checked="true"],
-        div[data-testid="stPills"] button[aria-checked="true"],
-        .st-key-hazard_pills label[aria-checked="true"],
-        .st-key-hazard_pills button[aria-checked="true"] {
+        .st-key-hazard_pills button[data-testid="stBaseButton-pillsActive"] {
             border-color: var(--c-warning) !important;
             background-color: var(--c-warning) !important;
             color: var(--c-warning-foreground) !important;
@@ -399,6 +489,9 @@ st.markdown(
             margin-bottom: 14px;
             text-align: center;
             font-size: 13px;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
         }
 
         /* ===================================================================
@@ -789,25 +882,8 @@ def show_battery_detail_dialog(battery_id):
 
 if st.session_state.page == "battery_list":
     # =======================================================================
-    # 배터리 관리 페이지
+    # 배터리 관리 페이지 (필터/테이블 레이아웃 리디자인)
     # =======================================================================
-    st.markdown(
-        f"""
-        <div class="triage-header">
-            <div class="triage-header-left">
-                <div>
-                    <p class="triage-header-text-main">배터리 관리</p>
-                    <p class="triage-header-text-sub">보유 배터리 현황 조회 및 상태 관리</p>
-                </div>
-            </div>
-            <div class="triage-header-user">
-                <span class="triage-header-user-name">{DUMMY_USER['name']} 님</span>
-                <span class="triage-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
 
     # --- 데이터 로드 ---
     channel_filter = DUMMY_USER["channel_name"]
@@ -823,11 +899,28 @@ if st.session_state.page == "battery_list":
             f"- 채널명 필터('{channel_filter}')가 등록 시 사용한 채널명과 일치하는지 확인해주세요."
         )
 
+    n_total = len(batteries) if batteries else 0
+
+    st.markdown(
+        f"""
+        <div class="list-header">
+            <div class="list-header-left">
+                <p class="list-header-title">배터리 관리</p>
+                <p class="list-header-sub">보유 배터리 현황 조회 및 상태 관리</p>
+            </div>
+            <div class="list-header-user">
+                <span class="list-header-user-name">{DUMMY_USER['name']} 님</span>
+                <span class="list-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     import json as _json
     import streamlit.components.v1 as components
 
     ROWS_JS         = _json.dumps(batteries_to_table_rows(batteries) if batteries else [])
-    COUNTS_JS       = _json.dumps({s: counts.get(s, 0) for s in ALL_STATUSES[1:]})
     BULK_STATUS_JS  = _json.dumps(["승인 전","승인 완료","수거 예정","완료"])
     STATUS_OPTIONS_JS = _json.dumps(ALL_STATUSES)
     GRADE_OPTIONS_JS  = _json.dumps(["전체", "Green", "Yellow", "Orange", "Gray", "Red", "미판정"])
@@ -846,45 +939,44 @@ if st.session_state.page == "battery_list":
 <meta charset="utf-8"/>
 <style>
 * {{ box-sizing:border-box; margin:0; padding:0; }}
-body {{ font-family:'Malgun Gothic','Segoe UI',sans-serif; font-size:13px; background:#f0f2f6; color:#1a2e44; }}
+body {{ font-family:'Malgun Gothic','Segoe UI',sans-serif; font-size:13px; background:transparent; color:#1a2e44; }}
 
-.filter-bar {{
-  background:#fff; border:1px solid #e2e8f0; border-radius:10px;
-  padding:10px 14px; display:flex; align-items:center; gap:8px;
-  margin-bottom:10px; flex-wrap:wrap;
+/* ── 필터 카드 ─────────────────────────────────── */
+.filter-card {{
+  background:#fff; border:1px solid #e2e8f0; border-radius:12px;
+  padding:16px; margin-bottom:12px;
 }}
-.filter-bar label {{ font-size:11px; color:#6b7280; font-weight:600; white-space:nowrap; }}
-.filter-bar input, .filter-bar select {{
-  height:30px; border:1px solid #d1d5db; border-radius:6px;
+.filter-row {{ display:flex; align-items:center; gap:16px; flex-wrap:wrap; margin-bottom:12px; }}
+.filter-row:last-child {{ margin-bottom:0; }}
+.filter-field {{ display:flex; flex-direction:column; gap:4px; }}
+.filter-field label {{ font-size:11px; color:#6b7280; font-weight:700; white-space:nowrap; }}
+.filter-field input, .filter-field select {{
+  height:32px; border:1px solid #d1d5db; border-radius:6px;
   padding:0 8px; font-size:12px; color:#374151; background:#f9fafb; outline:none;
 }}
-.filter-bar input {{ width:200px; }}
-.filter-bar select {{ width:110px; }}
-.sep {{ width:1px; height:22px; background:#e5e7eb; margin:0 2px; }}
-
-.summary-row {{ display:flex; gap:8px; margin-bottom:10px; }}
-.s-card {{
-  flex:1; background:#fff; border:1px solid #e2e8f0; border-radius:8px;
-  padding:10px 8px; text-align:center;
-}}
-.s-label {{ font-size:11px; color:#6b7280; font-weight:600; margin-bottom:4px; }}
-.s-count {{ font-size:20px; font-weight:800; color:#1a2e44; }}
-
-.table-wrap {{ background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }}
-.toolbar {{
-  display:flex; align-items:center; gap:8px;
-  padding:10px 14px; border-bottom:1px solid #f1f5f9;
-}}
-.info {{ font-size:12px; color:#6b7280; margin-right:auto; }}
-.btn {{ height:30px; padding:0 12px; border-radius:6px; border:none;
+.filter-field input {{ width:180px; }}
+.filter-field select {{ width:140px; }}
+.filter-actions {{ display:flex; align-items:center; gap:8px; margin-left:auto; }}
+.btn {{ height:32px; padding:0 14px; border-radius:6px; border:none;
   font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }}
 .btn:disabled {{ opacity:0.4; cursor:not-allowed; }}
 .btn-teal {{ background:#00838a; color:#fff; }}
 .btn-teal:hover:not(:disabled) {{ background:#006b71; }}
 .btn-outline {{ background:#fff; color:#374151; border:1px solid #d1d5db; }}
 .btn-outline:hover:not(:disabled) {{ background:#f3f4f6; }}
-.st-sel {{ height:30px; border:1px solid #d1d5db; border-radius:6px;
+.st-sel {{ height:32px; border:1px solid #d1d5db; border-radius:6px;
   padding:0 8px; font-size:12px; background:#f9fafb; outline:none; }}
+
+/* ── 테이블 카드 ────────────────────────────────── */
+.table-card {{ background:#fff; border:1px solid #e2e8f0; border-radius:12px; overflow:hidden; }}
+.table-toolbar {{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:12px 16px; border-bottom:1px solid #f1f5f9;
+}}
+.table-toolbar .info {{ font-size:13px; color:#1a2e44; }}
+.table-toolbar .info b {{ font-weight:800; }}
+.table-toolbar .sub-info {{ font-size:12px; color:#9ca3af; }}
+.bulk-bar {{ display:flex; align-items:center; gap:8px; padding:0 16px 12px 16px; }}
 
 table {{ width:100%; border-collapse:collapse; }}
 thead tr {{ background:#f8fafc; }}
@@ -894,54 +986,79 @@ th:first-child {{ width:36px; text-align:center; }}
 tbody tr {{ border-bottom:1px solid #f1f5f9; cursor:pointer; transition:background 0.1s; }}
 tbody tr:hover {{ background:#f8fafc; }}
 tbody tr.sel {{ background:#e8f6f7; }}
-td {{ padding:9px 10px; font-size:12px; color:#374151; }}
+td {{ padding:9px 10px; font-size:12px; color:#374151; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
 td:first-child {{ text-align:center; }}
+.receipt-no {{ color:#00838a; font-weight:700; }}
 .badge {{ display:inline-block; padding:2px 10px; border-radius:999px;
   font-size:11px; font-weight:700; color:#fff; white-space:nowrap; }}
-.feedback {{ margin:6px 14px; padding:7px 12px; border-radius:6px;
+.feedback {{ margin:0 16px 12px 16px; padding:7px 12px; border-radius:6px;
   font-size:12px; font-weight:600; background:#d1fae5; color:#065f46; }}
 .empty {{ padding:40px; text-align:center; color:#9ca3af; }}
 input[type=checkbox] {{ width:14px; height:14px; cursor:pointer; accent-color:#00838a; }}
 </style>
 </head>
 <body>
-<!-- 필터 바 -->
-<div class="filter-bar">
-  <label>VIN / 모델명</label>
-  <input id="q" type="text" placeholder="검색어 입력"/>
-  <div class="sep"></div>
-  <label>등급</label>
-  <select id="gf"><option>전체</option><option>Green</option><option>Yellow</option><option>Orange</option><option>Gray</option><option>Red</option><option>미판정</option></select>
-  <label>상태</label>
-  <select id="sf"></select>
-  <div class="sep"></div>
-  <button class="btn btn-outline" id="reset-btn">초기화</button>
+
+<!-- 필터 카드 -->
+<div class="filter-card">
+  <div class="filter-row">
+    <div class="filter-field">
+      <label>차대번호(VIN)</label>
+      <input id="q-vin" type="text" placeholder="VIN 입력"/>
+    </div>
+    <div class="filter-field">
+      <label>차량모델명</label>
+      <input id="q-model" type="text" placeholder="모델명 입력"/>
+    </div>
+    <div class="filter-field">
+      <label>배터리 제조사</label>
+      <input id="q-mfr" type="text" placeholder="제조사 입력"/>
+    </div>
+  </div>
+  <div class="filter-row">
+    <div class="filter-field">
+      <label>등급</label>
+      <select id="gf"></select>
+    </div>
+    <div class="filter-field">
+      <label>상태</label>
+      <select id="sf"></select>
+    </div>
+    <div class="filter-actions">
+      <button class="btn btn-teal" id="search-btn">조회</button>
+      <button class="btn btn-outline" id="reset-btn">초기화</button>
+      <button class="btn btn-outline" id="csv-btn">CSV 다운로드</button>
+    </div>
+  </div>
 </div>
-<!-- 상태 요약 카드 -->
-<div class="summary-row" id="summary"></div>
-<!-- 테이블 -->
-<div class="table-wrap">
-  <div class="toolbar">
-    <span class="info" id="info"></span>
+
+<!-- 테이블 카드 -->
+<div class="table-card">
+  <div class="table-toolbar">
+    <span class="info">조회건수 <b id="count-num">0</b>건</span>
+    <span class="sub-info">최근 접수순</span>
+  </div>
+  <div class="bulk-bar">
+    <span class="info" id="sel-info">전체</span>
     <select class="st-sel" id="bulk-sel" disabled></select>
-    <button class="btn btn-outline" id="csv-btn">CSV 다운로드</button>
   </div>
   <div class="feedback" id="fb" style="display:none"></div>
   <table>
     <thead><tr>
       <th><input type="checkbox" id="chk-all"/></th>
-      <th>VIN</th><th>모델명</th><th>제조사</th><th>용량(kWh)</th>
-      <th>등급</th><th>상태</th><th>추천업체</th><th>등록 일자</th>
+      <th>등록일자</th><th>접수번호</th><th>VIN</th><th>모델명</th><th>제조사</th>
+      <th>용량(kWh)</th><th>발생채널</th><th>등급</th><th>상태</th><th>추천업체</th>
     </tr></thead>
     <tbody id="tbody"></tbody>
   </table>
 </div>
+
 <script>
 const SC = {STATUS_COLOR_JS};
 const GC = {GRADE_COLOR_JS};
 const SO = {STATUS_OPTIONS_JS};
+const GO = {GRADE_OPTIONS_JS};
 const BS = {BULK_STATUS_JS};
-const COUNTS = {COUNTS_JS};
 let allRows = {ROWS_JS};
 let filtered = [...allRows];
 let checked = new Set();
@@ -952,15 +1069,24 @@ function badge(val, colorMap) {{
   return `<span class="badge" style="background:${{c}}">${{val}}</span>`;
 }}
 
+function receiptNo(row) {{
+  const year = (row["등록일자"] || "----").slice(0, 4);
+  return `B-${{year}}-${{String(row._id).padStart(4, "0")}}`;
+}}
+
 function applyFilter() {{
-  const q = document.getElementById("q").value.toLowerCase();
+  const vin = document.getElementById("q-vin").value.toLowerCase();
+  const model = document.getElementById("q-model").value.toLowerCase();
+  const mfr = document.getElementById("q-mfr").value.toLowerCase();
   const g = document.getElementById("gf").value;
   const s = document.getElementById("sf").value;
   filtered = allRows.filter(r => {{
-    const qOk = !q || (r.VIN||"").toLowerCase().includes(q) || (r["모델명"]||"").toLowerCase().includes(q);
+    const vinOk = !vin || (r.VIN||"").toLowerCase().includes(vin);
+    const modelOk = !model || (r["모델명"]||"").toLowerCase().includes(model);
+    const mfrOk = !mfr || (r["제조사"]||"").toLowerCase().includes(mfr);
     const gOk = g === "전체" || r["등급"] === g;
     const sOk = s === "전체" || r["상태"] === s;
-    return qOk && gOk && sOk;
+    return vinOk && modelOk && mfrOk && gOk && sOk;
   }});
   checked = new Set();
   render();
@@ -980,15 +1106,7 @@ function toggleRow(id) {{
 function applyBulk(status) {{
   if (!checked.size || !status) return;
   const ids = [...checked];
-  const counts = Object.assign({{}}, COUNTS);
-  allRows = allRows.map(r => {{
-    if (!checked.has(r._id)) return r;
-    const old = r["상태"];
-    if (counts[old] !== undefined) counts[old] = Math.max(0, (counts[old]||0)-1);
-    counts[status] = (counts[status]||0)+1;
-    return Object.assign({{}}, r, {{"상태": status}});
-  }});
-  Object.assign(COUNTS, counts);
+  allRows = allRows.map(r => checked.has(r._id) ? Object.assign({{}}, r, {{"상태": status}}) : r);
   checked.clear();
   applyFilter();
   const fb = document.getElementById("fb");
@@ -996,61 +1114,59 @@ function applyBulk(status) {{
   fb.style.display = "block";
   if (feedbackTimer) clearTimeout(feedbackTimer);
   feedbackTimer = setTimeout(() => {{ fb.style.display="none"; }}, 3000);
-  renderSummary();
 }}
 
 function downloadCSV() {{
-  const cols = ["VIN","모델명","제조사","용량(kWh)","등급","상태","추천업체","등록 일자"];
-  const rows = [cols.join(","), ...filtered.map(r =>
-    cols.map(c => `"${{String(r[c]||"").replace(/"/g,'""')}}"`).join(",")
-  )];
-  const blob = new Blob(["\uFEFF" + rows.join("\n"), {{type:"text/csv;charset=utf-8"}}]);
+  const cols = ["등록일자","접수번호","VIN","모델명","제조사","용량(kWh)","발생채널","등급","상태","추천업체"];
+  const rows = [cols.join(","), ...filtered.map(r => {{
+    const withReceipt = Object.assign({{}}, r, {{"접수번호": receiptNo(r)}});
+    return cols.map(c => `"${{String(withReceipt[c]||"").replace(/"/g,'""')}}"`).join(",");
+  }})];
+  const blob = new Blob(["\\uFEFF" + rows.join("\\n"), {{type:"text/csv;charset=utf-8"}}]);
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = "battery_list.csv";
   a.click();
 }}
 
-function renderSummary() {{
-  const keys = Object.keys(COUNTS);
-  document.getElementById("summary").innerHTML = keys.map(k =>
-    `<div class="s-card"><div class="s-label">${{k}}</div><div class="s-count">${{COUNTS[k]||0}}</div></div>`
-  ).join("");
-}}
-
 function render() {{
   const allChk = filtered.length > 0 && filtered.every(r => checked.has(r._id));
   const n = checked.size;
 
-  document.getElementById("info").textContent = n > 0 ? `${{n}}건 선택` : `전체 ${{filtered.length}}건`;
+  document.getElementById("count-num").textContent = filtered.length;
+  document.getElementById("sel-info").textContent = n > 0 ? `${{n}}건 선택` : "전체";
   document.getElementById("bulk-sel").disabled = n === 0;
 
   const tbody = document.getElementById("tbody");
   if (filtered.length === 0) {{
-    tbody.innerHTML = `<tr><td colspan="10" class="empty">조건에 맞는 배터리가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" class="empty">조건에 맞는 배터리가 없습니다.</td></tr>`;
   }} else {{
     tbody.innerHTML = filtered.map(r => `
       <tr class="${{checked.has(r._id) ? 'sel' : ''}}" onclick="toggleRow(${{r._id}})">
         <td onclick="event.stopPropagation()">
           <input type="checkbox" ${{checked.has(r._id)?'checked':''}} onchange="toggleRow(${{r._id}})"/>
         </td>
+        <td>${{r["등록일자"]||'—'}}</td>
+        <td class="receipt-no">${{receiptNo(r)}}</td>
         <td>${{r.VIN||'—'}}</td>
         <td>${{r['모델명']||'—'}}</td>
         <td>${{r['제조사']||'—'}}</td>
-        <td>${{r['용량(kWh)'] != null ? Number(r['용량(kWh)']).toFixed(1) : '—'}}</td>
+        <td>${{r['용량(kWh)'] != null && r['용량(kWh)'] !== '—' ? Number(r['용량(kWh)']).toFixed(1) : '—'}}</td>
+        <td>${{r['발생채널']||'—'}}</td>
         <td>${{badge(r['등급'], GC)}}</td>
         <td>${{badge(r['상태'], SC)}}</td>
         <td>${{r['추천업체']||'—'}}</td>
-        <td style="color:#6b7280;font-size:11px">${{r['등록 일자']||'—'}}</td>
       </tr>`).join("");
   }}
   document.getElementById("chk-all").checked = allChk;
 }}
 
 window.onload = function() {{
-  // 상태 select 옵션 초기화
+  const gfEl = document.getElementById("gf");
+  GO.forEach(g => {{ const o = document.createElement("option"); o.value=g; o.textContent=g; gfEl.appendChild(o); }});
   const sfEl = document.getElementById("sf");
   SO.forEach(s => {{ const o = document.createElement("option"); o.value=s; o.textContent=s; sfEl.appendChild(o); }});
+
   const bsEl = document.getElementById("bulk-sel");
   const placeholder = document.createElement("option");
   placeholder.value = "";
@@ -1064,15 +1180,18 @@ window.onload = function() {{
     applyBulk(status);
     e.target.value = "";
   }};
+
+  document.getElementById("search-btn").onclick = applyFilter;
   document.getElementById("reset-btn").onclick = () => {{
-    document.getElementById("q").value = "";
+    document.getElementById("q-vin").value = "";
+    document.getElementById("q-model").value = "";
+    document.getElementById("q-mfr").value = "";
     document.getElementById("gf").value = "전체";
     document.getElementById("sf").value = "전체";
     applyFilter();
   }};
   document.getElementById("csv-btn").onclick = downloadCSV;
   document.getElementById("chk-all").onchange = toggleAll;
-  renderSummary();
   render();
 }};
 </script>
@@ -1080,12 +1199,13 @@ window.onload = function() {{
 </html>"""
 
     n_rows = len(batteries) if batteries else 0
-    react_height = max(500, 340 + n_rows * 40) if n_rows > 0 else 300
+    react_height = max(420, 280 + n_rows * 40) if n_rows > 0 else 340
     components.html(react_html, height=react_height, scrolling=False)
 
     # 상세보기는 기존 Streamlit dialog 활용
     if st.session_state.get("selected_battery_id") and st.session_state.get("show_detail_panel"):
         show_battery_detail_dialog(st.session_state.selected_battery_id)
+
 
 
 elif st.session_state.page == "company":
@@ -1099,16 +1219,14 @@ elif st.session_state.page == "company":
 
     st.markdown(
         f"""
-        <div class="triage-header">
-            <div class="triage-header-left">
-                <div>
-                    <p class="triage-header-text-main">처리 업체</p>
-                    <p class="triage-header-text-sub">배터리 처리 가능 업체 현황 및 위치</p>
-                </div>
+        <div class="list-header">
+            <div class="list-header-left">
+                <p class="list-header-title">처리 업체</p>
+                <p class="list-header-sub">배터리 처리 가능 업체 현황 및 위치</p>
             </div>
-            <div class="triage-header-user">
-                <span class="triage-header-user-name">{DUMMY_USER['name']} 님</span>
-                <span class="triage-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
+            <div class="list-header-user">
+                <span class="list-header-user-name">{DUMMY_USER['name']} 님</span>
+                <span class="list-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
             </div>
         </div>
         """,
@@ -1320,12 +1438,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
 elif st.session_state.page == "settings":
     st.markdown(
         f"""
-        <div class="triage-header">
-            <div class="triage-header-left">
-                <div>
-                    <p class="triage-header-text-main">설정</p>
-                    <p class="triage-header-text-sub">발생채널 및 시스템 설정</p>
-                </div>
+        <div class="list-header">
+            <div class="list-header-left">
+                <p class="list-header-title">설정</p>
+                <p class="list-header-sub">발생채널 및 시스템 설정</p>
             </div>
         </div>
         """,
@@ -1333,7 +1449,7 @@ elif st.session_state.page == "settings":
     )
 
     # ── 계정 / 발생채널 정보 ─────────────────────────
-    with st.container(border=True, key="card_settings_account"):
+    with st.container(border=False, key="card_settings_account"):
         st.markdown(
             """
             <div class="section-title-row">
@@ -1354,7 +1470,7 @@ elif st.session_state.page == "settings":
             st.text_input("연락처", value="010-0000-0000", disabled=True)
 
     # ── 알림 설정 ───────────────────────────────────
-    with st.container(border=True, key="card_settings_notify"):
+    with st.container(border=False, key="card_settings_notify"):
         st.markdown(
             """
             <div class="section-title-row">
@@ -1371,47 +1487,13 @@ elif st.session_state.page == "settings":
         st.toggle("지정폐기물(Red 등급) 판정 즉시 알림", value=True, key="noti_red_grade")
         st.toggle("일일 접수 현황 요약 리포트", value=False, key="noti_daily_summary")
 
-    # ── 연동 상태 ───────────────────────────────────
-    with st.container(border=True, key="card_settings_status"):
+    # ── 표시 옵션 ───────────────────────────────────
+    with st.container(border=False, key="card_settings_display"):
         st.markdown(
             """
             <div class="section-title-row">
                 <div class="section-title-left">
                     <div class="section-num">03</div>
-                    <p class="section-title-text">시스템 연동 상태</p>
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        _status_rows = [
-            ("판정 API (FastAPI)", "정상", "#2e9e5b"),
-            ("데이터베이스 (PostgreSQL)", "정상", "#2e9e5b"),
-            ("RAG 정책 리포트 엔진", "정상", "#2e9e5b"),
-            ("공공데이터 연계 (광물가격·등록공장현황)", "정상", "#2e9e5b"),
-        ]
-        for _label, _status, _color in _status_rows:
-            st.markdown(
-                f"""
-                <div style="display:flex; justify-content:space-between; align-items:center;
-                            padding:10px 4px; border-bottom:1px solid var(--c-border);">
-                    <span style="font-size:13px; color:var(--c-foreground);">{_label}</span>
-                    <span style="display:flex; align-items:center; gap:6px;">
-                        <span style="width:8px; height:8px; border-radius:50%; background:{_color};"></span>
-                        <span style="font-size:12px; font-weight:700; color:{_color};">{_status}</span>
-                    </span>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-    # ── 표시 옵션 ───────────────────────────────────
-    with st.container(border=True, key="card_settings_display"):
-        st.markdown(
-            """
-            <div class="section-title-row">
-                <div class="section-title-left">
-                    <div class="section-num">04</div>
                     <p class="section-title-text">표시 옵션</p>
                 </div>
             </div>
@@ -1425,7 +1507,8 @@ elif st.session_state.page == "settings":
             st.selectbox("배터리 관리 목록 기본 정렬", ["등록일 최신순", "등록일 오래된순", "등급순"], index=0, key="sort_select")
 
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    st.button("저장", use_container_width=True, type="primary", disabled=True, key="settings_save_stub")
+    if st.button("로그아웃", use_container_width=True, type="primary", key="settings_logout_stub"):
+        st.info("로그아웃 기능은 준비 중입니다.")
 
 
 elif st.session_state.page == "intake":
@@ -1435,16 +1518,14 @@ elif st.session_state.page == "intake":
     if st.session_state.step == "input":
         st.markdown(
             f"""
-            <div class="triage-header">
-                <div class="triage-header-left">
-                    <div>
-                        <p class="triage-header-text-main">배터리 등록</p>
-                        <p class="triage-header-text-sub">사용후 배터리 접수 및 자동 판정</p>
-                    </div>
+            <div class="list-header">
+                <div class="list-header-left">
+                    <p class="list-header-title">배터리 등록</p>
+                    <p class="list-header-sub">사용후 배터리 접수 및 자동 판정</p>
                 </div>
-                <div class="triage-header-user">
-                    <span class="triage-header-user-name">{DUMMY_USER['name']} 님</span>
-                    <span class="triage-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
+                <div class="list-header-user">
+                    <span class="list-header-user-name">{DUMMY_USER['name']} 님</span>
+                    <span class="list-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
                 </div>
             </div>
             """,
@@ -1452,7 +1533,7 @@ elif st.session_state.page == "intake":
         )
 
         # 01. 식별 정보
-        card01 = st.container(border=True, key="card_id")
+        card01 = st.container(border=False, key="card_id")
         with card01:
             st.markdown(
                 """
@@ -1588,7 +1669,7 @@ elif st.session_state.page == "intake":
                 )
 
         # 02. 차량 기본 정보
-        card02 = st.container(border=True, key="card_vehicle")
+        card02 = st.container(border=False, key="card_vehicle")
         with card02:
             st.markdown(
                 """
@@ -1654,7 +1735,7 @@ elif st.session_state.page == "intake":
         # 03. 외관 상태
         condition_options = ["침수", "누액", "과열", "팽창", "충격"]
 
-        card03 = st.container(border=True, key="card_condition")
+        card03 = st.container(border=False, key="card_condition")
         with card03:
             placeholder_header = st.empty()
 
@@ -1835,18 +1916,15 @@ elif st.session_state.page == "intake":
     elif st.session_state.step == "approval":
         st.markdown(
             f"""
-            <div class="triage-header">
-                <div class="triage-header-left">
-                    
-                    <div>
-                        <p class="triage-header-text-sub">판정 결과 확인</p>
-                        <p class="triage-header-text-main">담당자 승인</p>
-                    </div>
+            <div class="list-header">
+                <div class="list-header-left">
+                    <p class="list-header-sub">판정 결과 확인</p>
+                    <p class="list-header-title">담당자 승인</p>
                 </div>
                 <div style="display:flex; align-items:center; gap:10px;">
-                    <div class="triage-header-user">
-                        <span class="triage-header-user-name">{DUMMY_USER['name']} 님</span>
-                        <span class="triage-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
+                    <div class="list-header-user">
+                        <span class="list-header-user-name">{DUMMY_USER['name']} 님</span>
+                        <span class="list-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
                     </div>
                     <div class="triage-channel-badge">최종 확인 단계</div>
                 </div>
@@ -1859,7 +1937,7 @@ elif st.session_state.page == "intake":
         triage_result = st.session_state.triage_result
         matching_result = st.session_state.matching_result
 
-        card_info = st.container(border=True, key="card_approval_info")
+        card_info = st.container(border=False, key="card_approval_info")
         with card_info:
             st.markdown(
                 """
@@ -1911,7 +1989,7 @@ elif st.session_state.page == "intake":
                 unsafe_allow_html=True,
             )
 
-        card_triage = st.container(border=True, key="card_approval_triage")
+        card_triage = st.container(border=False, key="card_approval_triage")
         with card_triage:
             st.markdown(
                 """
@@ -1961,7 +2039,7 @@ elif st.session_state.page == "intake":
                 unsafe_allow_html=True,
             )
 
-        card_matching = st.container(border=True, key="card_approval_matching")
+        card_matching = st.container(border=False, key="card_approval_matching")
         with card_matching:
             st.markdown(
                 """

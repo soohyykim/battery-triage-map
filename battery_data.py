@@ -175,6 +175,8 @@ def batteries_to_table_rows(batteries):
             "등급": b["grade"] or "미판정",
             "상태": b["status"],
             "추천업체": b["matched_company"] or "—",
+            "등록일자": (b["created_at"] or "")[:10] or "—",
+            "발생채널": b["channel_name"] or "—",
             "_id": b["id"],
         })
     return rows
