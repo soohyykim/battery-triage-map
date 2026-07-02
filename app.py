@@ -183,8 +183,13 @@ st.markdown(
             font-size: 10px;
         }
 
-        /* ---------- 카드(번호 섹션)만 남기고 바깥 큰 박스 제거 ---------- */
-        div[data-testid="stVerticalBlockBorderWrapper"] {
+        /* ---------- 카드(번호 섹션) 스타일 ----------
+           예전에는 모든 stVerticalBlockBorderWrapper에 무조건 카드 스타일을
+           입혔는데, 그러면 st.columns()나 페이지 루트처럼 의도치 않은
+           컨테이너까지 전부 박스가 씌워지는 문제가 있었다. 이제는 카드로
+           쓰고 싶은 컨테이너에만 key="card_..." 를 부여하고, 그 key로 생긴
+           .st-key-card_* 클래스가 있는 wrapper에만 카드 스타일을 입힌다. */
+        div[class*="st-key-card_"] {
             border-radius: 12px !important;
             margin-bottom: 14px;
             background-color: var(--c-card);
@@ -196,7 +201,7 @@ st.markdown(
         }
         /* Streamlit이 카드를 감싸는 상위 element-container에 거터(margin/padding)를
            추가로 붙이는 경우가 있어, 헤더와 폭이 미세하게 어긋나 보임 → 0으로 강제 */
-        div[data-testid="stVerticalBlockBorderWrapper"] > div {
+        div[class*="st-key-card_"] > div {
             width: 100% !important;
         }
         .block-container > div[data-testid="stVerticalBlock"] {
@@ -1328,7 +1333,7 @@ elif st.session_state.page == "settings":
     )
 
     # ── 계정 / 발생채널 정보 ─────────────────────────
-    with st.container(border=True):
+    with st.container(border=True, key="card_settings_account"):
         st.markdown(
             """
             <div class="section-title-row">
@@ -1349,7 +1354,7 @@ elif st.session_state.page == "settings":
             st.text_input("연락처", value="010-0000-0000", disabled=True)
 
     # ── 알림 설정 ───────────────────────────────────
-    with st.container(border=True):
+    with st.container(border=True, key="card_settings_notify"):
         st.markdown(
             """
             <div class="section-title-row">
@@ -1367,7 +1372,7 @@ elif st.session_state.page == "settings":
         st.toggle("일일 접수 현황 요약 리포트", value=False, key="noti_daily_summary")
 
     # ── 연동 상태 ───────────────────────────────────
-    with st.container(border=True):
+    with st.container(border=True, key="card_settings_status"):
         st.markdown(
             """
             <div class="section-title-row">
@@ -1401,7 +1406,7 @@ elif st.session_state.page == "settings":
             )
 
     # ── 표시 옵션 ───────────────────────────────────
-    with st.container(border=True):
+    with st.container(border=True, key="card_settings_display"):
         st.markdown(
             """
             <div class="section-title-row">
@@ -1447,7 +1452,7 @@ elif st.session_state.page == "intake":
         )
 
         # 01. 식별 정보
-        card01 = st.container(border=True)
+        card01 = st.container(border=True, key="card_id")
         with card01:
             st.markdown(
                 """
@@ -1583,7 +1588,7 @@ elif st.session_state.page == "intake":
                 )
 
         # 02. 차량 기본 정보
-        card02 = st.container(border=True)
+        card02 = st.container(border=True, key="card_vehicle")
         with card02:
             st.markdown(
                 """
@@ -1649,7 +1654,7 @@ elif st.session_state.page == "intake":
         # 03. 외관 상태
         condition_options = ["침수", "누액", "과열", "팽창", "충격"]
 
-        card03 = st.container(border=True)
+        card03 = st.container(border=True, key="card_condition")
         with card03:
             placeholder_header = st.empty()
 
@@ -1691,7 +1696,7 @@ elif st.session_state.page == "intake":
         st.markdown(
             f"""
             <style>
-                div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stPills"]) {{
+                div[class*="st-key-card_condition"] {{
                     {border_css}
                 }}
             </style>
@@ -1854,7 +1859,7 @@ elif st.session_state.page == "intake":
         triage_result = st.session_state.triage_result
         matching_result = st.session_state.matching_result
 
-        card_info = st.container(border=True)
+        card_info = st.container(border=True, key="card_approval_info")
         with card_info:
             st.markdown(
                 """
@@ -1906,7 +1911,7 @@ elif st.session_state.page == "intake":
                 unsafe_allow_html=True,
             )
 
-        card_triage = st.container(border=True)
+        card_triage = st.container(border=True, key="card_approval_triage")
         with card_triage:
             st.markdown(
                 """
@@ -1956,7 +1961,7 @@ elif st.session_state.page == "intake":
                 unsafe_allow_html=True,
             )
 
-        card_matching = st.container(border=True)
+        card_matching = st.container(border=True, key="card_approval_matching")
         with card_matching:
             st.markdown(
                 """
