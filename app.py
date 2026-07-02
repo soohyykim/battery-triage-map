@@ -805,10 +805,6 @@ if "channel_type" not in st.session_state:
     st.session_state.channel_type = DUMMY_USER["channel_type"]
 if "scanned_vin" not in st.session_state:
     st.session_state.scanned_vin = None
-if "selected_battery_id" not in st.session_state:
-    st.session_state.selected_battery_id = None
-if "show_detail_panel" not in st.session_state:
-    st.session_state.show_detail_panel = False
 
 # ---------------------------------------------------------------------------
 # 사이드바 — 로고 / 메뉴 그룹 / 로그인 정보
@@ -870,23 +866,59 @@ def decode_barcode(image):
 # ---------------------------------------------------------------------------
 # 배터리 상세보기 모달 (st.dialog — 화면 중앙에 바로 뜨므로 스크롤 이동 불필요)
 # ---------------------------------------------------------------------------
-@st.dialog("배터리 상세 정보")
+@st.dialog("배터리 상세 정보 · 판정 결과")
 def show_battery_detail_dialog(battery_id):
     detail = fetch_battery_detail(battery_id)
     if not detail:
         st.error("배터리 정보를 찾을 수 없습니다.")
         return
 
-    st.markdown(f"**{detail['vin']}**")
+    st.markdown(f"**{detail.get('vin') or '—'}**")
+    st.caption(f"{detail.get('battery_manufacturer') or '제조사 미입력'} · {detail.get('model_name') or '모델명 미입력'}")
 
     d1, d2, d3 = st.columns(3)
     with d1:
-        st.metric("등급", f"{GRADE_EMOJI.get(detail['grade'], '—')} {detail['grade'] or '미판정'}")
+        st.metric("등급", f"{GRADE_EMOJI.get(detail.get('grade'), '—')} {detail.get('grade') or '미판정'}")
     with d2:
-        st.metric("SOH Proxy", f"{detail['soh_proxy_score']}%" if detail['soh_proxy_score'] else "—")
+        st.metric("SOH Proxy", f"{detail['soh_proxy_score']}%" if detail.get('soh_proxy_score') is not None else "—")
     with d3:
-        st.metric("현재 상태", detail["status"])
+        st.metric("현재 상태", detail.get("status", "—"))
 
+    st.markdown("**배터리 정보**")
+    cap = detail.get("capacity_kwh")
+    st.markdown(
+        f"- 용량: {cap if cap is not None else '—'} kWh &nbsp;·&nbsp; 화학계: {detail.get('chemistry') or '—'}\n"
+        f"- 연식: {detail.get('vehicle_year') or '미입력'}년 &nbsp;·&nbsp; 주행거리: {(detail.get('mileage_km') or 0):,.0f} km"
+    )
+
+    path_label = {
+        "reuse_candidate": "재사용 후보",
+        "reuse_or_recycle_after_diagnosis": "추가진단 후 판단",
+        "recycle_candidate": "재활용 후보",
+        "diagnosis_required": "정밀진단 필요",
+        "designated_waste": "지정폐기물 처리",
+    }.get(detail.get("recommended_path"), detail.get("recommended_path") or "—")
+
+    st.markdown("**Triage 판정**")
+    e1, e2 = st.columns(2)
+    with e1:
+        st.write(f"처리 방향: **{path_label}**")
+        st.write(f"재사용 점수: {detail.get('reuse_score') if detail.get('reuse_score') is not None else '—'}")
+    with e2:
+        conf = detail.get("data_confidence")
+        st.write(f"데이터 신뢰도: {f'{conf:.0%}' if isinstance(conf, (int, float)) else '—'}")
+        st.write(f"재활용 점수: {detail.get('recycle_score') if detail.get('recycle_score') is not None else '—'}")
+
+    matched_companies = detail.get("matched_companies") or []
+    if matched_companies:
+        st.markdown("**추천 처리업체**")
+        for c in matched_companies[:3]:
+            st.write(
+                f"{c.get('rank')}순위 · **{c.get('company_name')}** "
+                f"({c.get('region') or '—'} · {c.get('distance_km')}km · 점수 {c.get('total_score')})"
+            )
+
+    st.markdown("---")
     st.markdown("**상태 변경 (테스트용 — 더미 데이터에만 적용됨)**")
     new_status = st.selectbox(
         "변경할 상태",
@@ -900,11 +932,9 @@ def show_battery_detail_dialog(battery_id):
         if st.button("상태 변경 적용", use_container_width=True, type="primary"):
             update_battery_status(detail["id"], new_status)
             st.success(f"상태가 '{new_status}'(으)로 변경되었습니다.")
-            st.session_state.show_detail_panel = False
             st.rerun()
     with col_s2:
         if st.button("닫기", use_container_width=True):
-            st.session_state.show_detail_panel = False
             st.rerun()
 
 
@@ -1296,6 +1326,43 @@ window.onload = function() {{
 </html>"""
 
     # -----------------------------------------------------------------
+    # 상세보기 / 판정 결과 — iframe 테이블 행 클릭은 Streamlit과 값을
+    # 주고받을 수 없어서, 순수 Streamlit 위젯으로 배터리를 고른 뒤
+    # 상세보기 버튼을 누르면 st.dialog 모달이 바로 뜨는 방식으로 구현.
+    # -----------------------------------------------------------------
+    if batteries:
+        detail_card = st.container(border=False, key="card_detail_view")
+        with detail_card:
+            st.markdown(
+                """
+                <div class="section-title-row">
+                    <div class="section-title-left">
+                        <p class="section-title-text">상세보기 · 판정 결과</p>
+                    </div>
+                </div>
+                <p class="section-desc">배터리를 선택하면 상세 정보와 Triage 판정 결과를 확인할 수 있습니다.</p>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            detail_labels = [
+                f"{b['vin']} · {b['model_name'] or '모델명 미입력'} · {b['grade'] or '미판정'}등급 · {b['status']} (#{b['id']})"
+                for b in batteries
+            ]
+            d_col1, d_col2 = st.columns([3, 1])
+            with d_col1:
+                detail_selected_label = st.selectbox(
+                    "상세보기할 배터리",
+                    detail_labels,
+                    label_visibility="collapsed",
+                    key="detail_battery_select",
+                )
+            with d_col2:
+                if st.button("상세보기", use_container_width=True, key="detail_view_btn"):
+                    target = batteries[detail_labels.index(detail_selected_label)]
+                    show_battery_detail_dialog(target["id"])
+
+    # -----------------------------------------------------------------
     # 처리 요청 — 커스텀 HTML 테이블(iframe)은 Streamlit과 값을 직접
     # 주고받을 수 없어(로컬 환경에 따라 top-navigation이 막히기도 함),
     # 순수 Streamlit 위젯으로 별도 구성한다. "판정" 상태인 배터리만
@@ -1382,11 +1449,6 @@ window.onload = function() {{
     n_rows = len(batteries) if batteries else 0
     react_height = max(480, 340 + n_rows * 40) if n_rows > 0 else 400
     components.html(react_html, height=react_height, scrolling=False)
-
-
-    # 상세보기는 기존 Streamlit dialog 활용
-    if st.session_state.get("selected_battery_id") and st.session_state.get("show_detail_panel"):
-        show_battery_detail_dialog(st.session_state.selected_battery_id)
 
 
 
