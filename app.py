@@ -25,7 +25,6 @@ import requests
 from battery_data import (
     fetch_batteries,
     fetch_battery_detail,
-    update_battery_status,
     request_processing,
     get_channel_list,
     get_status_counts,
@@ -34,7 +33,6 @@ from battery_data import (
     ALL_STATUSES,
     STATUS_COLOR,
     STATUS_TRIAGED,
-    STATUS_ACCEPTED,
     GRADE_EMOJI,
     DUMMY_USER,
     API_BASE_URL,
@@ -866,7 +864,7 @@ def decode_barcode(image):
 # ---------------------------------------------------------------------------
 # 배터리 상세보기 모달 (st.dialog — 화면 중앙에 바로 뜨므로 스크롤 이동 불필요)
 # ---------------------------------------------------------------------------
-@st.dialog("배터리 상세 정보 · 판정 결과")
+@st.dialog("배터리 상세 정보 · 판정 결과", width="large")
 def show_battery_detail_dialog(battery_id):
     detail = fetch_battery_detail(battery_id)
     if not detail:
@@ -919,23 +917,8 @@ def show_battery_detail_dialog(battery_id):
             )
 
     st.markdown("---")
-    st.markdown("**상태 변경 (테스트용 — 더미 데이터에만 적용됨)**")
-    new_status = st.selectbox(
-        "변경할 상태",
-        ALL_STATUSES[1:],
-        index=ALL_STATUSES[1:].index(detail["status"]) if detail["status"] in ALL_STATUSES[1:] else 0,
-        key="new_status_select",
-    )
-
-    col_s1, col_s2 = st.columns(2)
-    with col_s1:
-        if st.button("상태 변경 적용", use_container_width=True, type="primary"):
-            update_battery_status(detail["id"], new_status)
-            st.success(f"상태가 '{new_status}'(으)로 변경되었습니다.")
-            st.rerun()
-    with col_s2:
-        if st.button("닫기", use_container_width=True):
-            st.rerun()
+    if st.button("닫기", use_container_width=True):
+        st.rerun()
 
 
 # ===========================================================================
@@ -1326,9 +1309,9 @@ window.onload = function() {{
 </html>"""
 
     # -----------------------------------------------------------------
-    # 상세보기 / 판정 결과 — iframe 테이블 행 클릭은 Streamlit과 값을
-    # 주고받을 수 없어서, 순수 Streamlit 위젯으로 배터리를 고른 뒤
-    # 상세보기 버튼을 누르면 st.dialog 모달이 바로 뜨는 방식으로 구현.
+    # 상세보기 / 판정 결과 · 처리 요청 — iframe 테이블(행 클릭/체크박스)은
+    # Streamlit과 값을 직접 주고받을 수 없어서, 순수 Streamlit 위젯으로
+    # 배터리를 고른 뒤 버튼으로 각 액션을 수행하는 방식으로 구현.
     # -----------------------------------------------------------------
     if batteries:
         detail_card = st.container(border=False, key="card_detail_view")
@@ -1340,7 +1323,7 @@ window.onload = function() {{
                         <p class="section-title-text">상세보기 · 판정 결과</p>
                     </div>
                 </div>
-                <p class="section-desc">배터리를 선택하면 상세 정보와 Triage 판정 결과를 확인할 수 있습니다.</p>
+                <p class="section-desc">배터리를 선택해 상세 정보를 확인하거나, 판정이 끝난 배터리는 바로 처리 요청을 보낼 수 있습니다.</p>
                 """,
                 unsafe_allow_html=True,
             )
@@ -1349,101 +1332,67 @@ window.onload = function() {{
                 f"{b['vin']} · {b['model_name'] or '모델명 미입력'} · {b['grade'] or '미판정'}등급 · {b['status']} (#{b['id']})"
                 for b in batteries
             ]
-            d_col1, d_col2 = st.columns([3, 1])
-            with d_col1:
-                detail_selected_label = st.selectbox(
-                    "상세보기할 배터리",
-                    detail_labels,
-                    label_visibility="collapsed",
-                    key="detail_battery_select",
-                )
-            with d_col2:
-                if st.button("상세보기", use_container_width=True, key="detail_view_btn"):
-                    target = batteries[detail_labels.index(detail_selected_label)]
-                    show_battery_detail_dialog(target["id"])
-
-    # -----------------------------------------------------------------
-    # 처리 요청 — 커스텀 HTML 테이블(iframe)은 Streamlit과 값을 직접
-    # 주고받을 수 없어(로컬 환경에 따라 top-navigation이 막히기도 함),
-    # 순수 Streamlit 위젯으로 별도 구성한다. "판정" 상태인 배터리만
-    # 대상으로 하며, 클릭 즉시 "처리 수락" 상태로 전환 후 처리완료
-    # 페이지로 이동한다.
-    # -----------------------------------------------------------------
-    requestable = [b for b in (batteries or []) if b["status"] == STATUS_TRIAGED]
-    if requestable:
-        req_card = st.container(border=False, key="card_request_processing")
-        with req_card:
-            st.markdown(
-                """
-                <div class="section-title-row">
-                    <div class="section-title-left">
-                        <p class="section-title-text">처리 요청</p>
-                    </div>
-                </div>
-                <p class="section-desc">판정이 끝난 배터리를 선택하고 처리 요청을 보내면, 즉시 처리 수락 상태로 전환되고 처리 완료 화면으로 이동합니다.</p>
-                """,
-                unsafe_allow_html=True,
+            detail_selected_label = st.selectbox(
+                "배터리 선택",
+                detail_labels,
+                label_visibility="collapsed",
+                key="detail_battery_select",
             )
+            target = batteries[detail_labels.index(detail_selected_label)]
 
-            req_labels = [
-                f"{b['vin']} · {b['model_name'] or '모델명 미입력'} · {b['grade'] or '미판정'}등급 (#{b['id']})"
-                for b in requestable
-            ]
-            req_col1, req_col2 = st.columns([3, 1])
-            with req_col1:
-                selected_label = st.selectbox(
-                    "처리 요청할 배터리",
-                    req_labels,
-                    label_visibility="collapsed",
-                    key="request_battery_select",
-                )
-            with req_col2:
+            btn_col1, btn_col2 = st.columns(2)
+            with btn_col1:
+                if st.button("상세보기", use_container_width=True, key="detail_view_btn"):
+                    show_battery_detail_dialog(target["id"])
+            with btn_col2:
                 if st.button("처리 요청", use_container_width=True, type="primary", key="request_processing_btn"):
-                    target = requestable[req_labels.index(selected_label)]
-                    detail = fetch_battery_detail(target["id"])
-                    if detail is None:
-                        st.error("배터리 정보를 불러오지 못했습니다.")
+                    if target["status"] != STATUS_TRIAGED:
+                        st.warning("이미 처리 요청을 진행했거나 판정이 끝나지 않은 배터리입니다.")
                     else:
-                        request_processing(target["id"])
-                        st.session_state.intake_record = {
-                            "identification": {
-                                "vin": detail.get("vin"),
-                                "model_name": detail.get("model_name"),
-                                "battery_manufacturer": detail.get("battery_manufacturer"),
-                                "serial_number": None,
-                                "capacity_kwh": detail.get("capacity_kwh"),
-                            },
-                            "vehicle_info": {
-                                "model_year": None,
-                                "mileage_km": 0,
-                                "quantity": 1,
-                                "chemistry": detail.get("chemistry"),
-                            },
-                            "condition_flags": {
-                                "flooded": False, "leakage": False, "overheated": False,
-                                "swollen": False, "impact": False,
-                            },
-                            "channel": {
-                                "name": DUMMY_USER["channel_name"],
-                                "type": DUMMY_USER["channel_type"],
-                            },
-                        }
-                        st.session_state.triage_result = {
-                            "grade": detail.get("grade"),
-                            "soh_proxy_score": detail.get("soh_proxy_score"),
-                            "reuse_score": detail.get("reuse_score"),
-                            "recycle_score": detail.get("recycle_score"),
-                            "recommended_path": detail.get("recommended_path"),
-                            "data_confidence": detail.get("data_confidence"),
-                            "triage_id": detail.get("id"),
-                        }
-                        st.session_state.matching_result = {
-                            "status": "matched",
-                            "matched_companies": detail.get("matched_companies", []),
-                        }
-                        st.session_state.page = "intake"
-                        st.session_state.step = "completed"
-                        st.rerun()
+                        detail = fetch_battery_detail(target["id"])
+                        if detail is None:
+                            st.error("배터리 정보를 불러오지 못했습니다.")
+                        else:
+                            request_processing(target["id"])
+                            st.session_state.intake_record = {
+                                "identification": {
+                                    "vin": detail.get("vin"),
+                                    "model_name": detail.get("model_name"),
+                                    "battery_manufacturer": detail.get("battery_manufacturer"),
+                                    "serial_number": None,
+                                    "capacity_kwh": detail.get("capacity_kwh"),
+                                },
+                                "vehicle_info": {
+                                    "model_year": None,
+                                    "mileage_km": 0,
+                                    "quantity": 1,
+                                    "chemistry": detail.get("chemistry"),
+                                },
+                                "condition_flags": {
+                                    "flooded": False, "leakage": False, "overheated": False,
+                                    "swollen": False, "impact": False,
+                                },
+                                "channel": {
+                                    "name": DUMMY_USER["channel_name"],
+                                    "type": DUMMY_USER["channel_type"],
+                                },
+                            }
+                            st.session_state.triage_result = {
+                                "grade": detail.get("grade"),
+                                "soh_proxy_score": detail.get("soh_proxy_score"),
+                                "reuse_score": detail.get("reuse_score"),
+                                "recycle_score": detail.get("recycle_score"),
+                                "recommended_path": detail.get("recommended_path"),
+                                "data_confidence": detail.get("data_confidence"),
+                                "triage_id": detail.get("id"),
+                            }
+                            st.session_state.matching_result = {
+                                "status": "matched",
+                                "matched_companies": detail.get("matched_companies", []),
+                            }
+                            st.session_state.page = "intake"
+                            st.session_state.step = "completed"
+                            st.rerun()
         st.markdown("<div style='margin-top:14px;'></div>", unsafe_allow_html=True)
 
     n_rows = len(batteries) if batteries else 0
