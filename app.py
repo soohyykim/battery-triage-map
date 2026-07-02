@@ -112,7 +112,9 @@ st.markdown(
         .triage-header {
             background-color: var(--c-primary);
             border-radius: 14px;
-            padding: 14px 18px;
+            padding: 0 18px;
+            height: 62px;
+            box-sizing: border-box;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -120,7 +122,6 @@ st.markdown(
             position: sticky;
             top: 1rem;
             width: 100%;
-            box-sizing: border-box;
             z-index: 999;
             margin-bottom: 16px;
         }
@@ -331,15 +332,20 @@ st.markdown(
         }
 
         /* pills — 외관 상태 점검 (침수/누액/과열/팽창/충격) 5개 버튼을
-           카드 너비에 꽉 차게 균등 분배. label/button 선택자를 모두 커버해
-           Streamlit 버전에 따른 내부 DOM 차이에 대응 */
-        div[data-testid="stPills"] {
+           카드 너비에 꽉 차게 균등 분배. data-testid 기반 선택자에 더해,
+           위젯의 key(hazard_pills)로 생성되는 .st-key-hazard_pills 클래스도
+           함께 타겟팅해서 Streamlit 버전별 내부 DOM 차이에 대응 */
+        div[data-testid="stPills"],
+        .st-key-hazard_pills div[role="radiogroup"],
+        .st-key-hazard_pills > div > div {
             display: flex !important;
             width: 100% !important;
             gap: 8px !important;
         }
         div[data-testid="stPills"] label,
-        div[data-testid="stPills"] button {
+        div[data-testid="stPills"] button,
+        .st-key-hazard_pills label,
+        .st-key-hazard_pills button {
             flex: 1 1 0 !important;
             width: auto !important;
             min-height: 34px !important;
@@ -353,7 +359,9 @@ st.markdown(
             transition: all 0.15s ease;
         }
         div[data-testid="stPills"] label[aria-checked="true"],
-        div[data-testid="stPills"] button[aria-checked="true"] {
+        div[data-testid="stPills"] button[aria-checked="true"],
+        .st-key-hazard_pills label[aria-checked="true"],
+        .st-key-hazard_pills button[aria-checked="true"] {
             border-color: var(--c-warning) !important;
             background-color: var(--c-warning) !important;
             color: var(--c-warning-foreground) !important;
@@ -468,20 +476,23 @@ st.markdown(
             cursor: not-allowed;
         }
         section[data-testid="stSidebar"] > div:first-child {
-            padding-top: 0 !important;
+            padding-top: 1rem !important;
         }
         section[data-testid="stSidebar"] [data-testid="stSidebarContent"] {
-            padding-top: 0 !important;
+            padding-top: 1rem !important;
         }
         .sidebar-logo {
             display: flex;
             align-items: flex-start;
             flex-direction: column;
+            justify-content: center;
             gap: 4px;
-            /* 메인 헤더(.triage-header)는 padding-top 14px 뒤에 텍스트가 오므로,
-               사이드바 상단 padding-top(0)에 1rem(16px)+14px = 30px를 줘서
-               로고 텍스트와 메인 화면 메뉴명의 높이를 맞춤 */
-            padding: 30px 4px 16px 4px;
+            /* 메인 헤더(.triage-header)와 동일한 높이(62px)로 고정하고 세로 중앙
+               정렬해서, 사이드바 블록의 padding-top(main과 동일한 1rem)이 같으면
+               텍스트 높이가 자연스럽게 일치하도록 함 */
+            height: 62px;
+            padding: 4px;
+            box-sizing: border-box;
             border-bottom: 1px solid rgba(255,255,255,0.15) !important;
             margin-bottom: 14px;
         }
@@ -1307,7 +1318,103 @@ elif st.session_state.page == "settings":
         """,
         unsafe_allow_html=True,
     )
-    st.info("설정 기능은 추후 구현 예정입니다.")
+    st.caption("아래 항목은 시연용 화면입니다. 실제 저장·적용 기능은 다음 단계에서 연결될 예정입니다.")
+
+    # ── 계정 / 발생채널 정보 ─────────────────────────
+    with st.container(border=True):
+        st.markdown(
+            """
+            <div class="section-title-row">
+                <div class="section-title-left">
+                    <div class="section-num">01</div>
+                    <p class="section-title-text">계정 · 발생채널 정보</p>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            st.text_input("담당자명", value=DUMMY_USER["name"], disabled=True)
+            st.text_input("발생채널명", value=DUMMY_USER["channel_name"], disabled=True)
+        with c2:
+            st.text_input("소속 유형", value=DUMMY_USER["channel_type"], disabled=True)
+            st.text_input("연락처", value="010-0000-0000", disabled=True)
+
+    # ── 알림 설정 ───────────────────────────────────
+    with st.container(border=True):
+        st.markdown(
+            """
+            <div class="section-title-row">
+                <div class="section-title-left">
+                    <div class="section-num">02</div>
+                    <p class="section-title-text">알림 설정</p>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.toggle("판정 완료 시 알림", value=True, key="noti_triage_done")
+        st.toggle("처리업체 매칭 결과 알림", value=True, key="noti_match_done")
+        st.toggle("지정폐기물(Red 등급) 판정 즉시 알림", value=True, key="noti_red_grade")
+        st.toggle("일일 접수 현황 요약 리포트", value=False, key="noti_daily_summary")
+
+    # ── 연동 상태 ───────────────────────────────────
+    with st.container(border=True):
+        st.markdown(
+            """
+            <div class="section-title-row">
+                <div class="section-title-left">
+                    <div class="section-num">03</div>
+                    <p class="section-title-text">시스템 연동 상태</p>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        _status_rows = [
+            ("판정 API (FastAPI)", "정상", "#2e9e5b"),
+            ("데이터베이스 (PostgreSQL)", "정상", "#2e9e5b"),
+            ("RAG 정책 리포트 엔진", "정상", "#2e9e5b"),
+            ("공공데이터 연계 (광물가격·등록공장현황)", "정상", "#2e9e5b"),
+        ]
+        for _label, _status, _color in _status_rows:
+            st.markdown(
+                f"""
+                <div style="display:flex; justify-content:space-between; align-items:center;
+                            padding:10px 4px; border-bottom:1px solid var(--c-border);">
+                    <span style="font-size:13px; color:var(--c-foreground);">{_label}</span>
+                    <span style="display:flex; align-items:center; gap:6px;">
+                        <span style="width:8px; height:8px; border-radius:50%; background:{_color};"></span>
+                        <span style="font-size:12px; font-weight:700; color:{_color};">{_status}</span>
+                    </span>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    # ── 표시 옵션 ───────────────────────────────────
+    with st.container(border=True):
+        st.markdown(
+            """
+            <div class="section-title-row">
+                <div class="section-title-left">
+                    <div class="section-num">04</div>
+                    <p class="section-title-text">표시 옵션</p>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        d1, d2 = st.columns(2)
+        with d1:
+            st.selectbox("언어", ["한국어", "English"], index=0, key="lang_select")
+        with d2:
+            st.selectbox("배터리 관리 목록 기본 정렬", ["등록일 최신순", "등록일 오래된순", "등급순"], index=0, key="sort_select")
+
+    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+    st.button("저장", use_container_width=True, type="primary", disabled=True, key="settings_save_stub")
+    st.caption("설정 저장 기능은 준비 중입니다.")
 
 
 elif st.session_state.page == "intake":
