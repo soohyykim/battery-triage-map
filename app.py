@@ -359,6 +359,18 @@ st.markdown(
             color: var(--c-warning-foreground) !important;
         }
 
+        /* 배터리 등록/판정 버튼 행 — 카드형 배경/테두리가 전역 규칙(아래
+           stVerticalBlockBorderWrapper)에 의해 자동으로 씌워지는 것을 제거.
+           버튼에 준 key를 통해 해당 버튼을 포함하는 래퍼를 찾아 무력화 */
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-reg_battery_btn),
+        div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-judge_battery_btn) {
+            border: none !important;
+            background: transparent !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            margin-bottom: 0 !important;
+        }
+
         .footer-note {
             text-align: center;
             font-size: 10px;
@@ -782,9 +794,14 @@ if st.session_state.page == "battery_list":
     try:
         counts = get_status_counts(channel_name=channel_filter)
         batteries = fetch_batteries(channel_name=channel_filter)
-    except Exception:
+    except Exception as e:
         counts = {}
         batteries = []
+        st.error(
+            f"배터리 목록을 불러오지 못했습니다: {e}\n\n"
+            f"- 백엔드({API_BASE_URL})가 깨어있는지 확인해주세요 (Render 무료 플랜은 30~60초 콜드 스타트가 있습니다).\n"
+            f"- 채널명 필터('{channel_filter}')가 등록 시 사용한 채널명과 일치하는지 확인해주세요."
+        )
 
     import json as _json
     import streamlit.components.v1 as components
@@ -1273,7 +1290,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(
         components.html(_co_html, height=80 + len(_co_rows) * 44, scrolling=False)
 
     else:
-        st.warning("처리 업체 데이터를 불러오지 못했습니다. data/company_master_v3.csv를 확인해주세요.")
+        st.warning("처리 업체 데이터를 불러오지 못했습니다. data/companies_mock.csv를 확인해주세요.")
 
 
 elif st.session_state.page == "settings":
@@ -1574,12 +1591,12 @@ elif st.session_state.page == "intake":
         reg_col, judge_col = st.columns(2)
 
         with reg_col:
-            if st.button("배터리 등록", use_container_width=True):
+            if st.button("배터리 등록", use_container_width=True, key="reg_battery_btn"):
                 # TODO: 등록 전용 API 연결 예정 (예: POST /battery, 상태값 "판정 전"으로 저장)
                 st.info("배터리 등록 기능은 준비 중입니다. 판정을 진행해주세요.")
 
         with judge_col:
-            if st.button("배터리 판정", use_container_width=True, type="primary"):
+            if st.button("배터리 판정", use_container_width=True, type="primary", key="judge_battery_btn"):
                 errors = []
                 if not vin:
                     errors.append("차대번호(VIN)는 필수 입력 항목입니다.")
