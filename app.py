@@ -26,12 +26,15 @@ from battery_data import (
     fetch_batteries,
     fetch_battery_detail,
     update_battery_status,
+    request_processing,
     get_channel_list,
     get_status_counts,
     batteries_to_table_rows,
     style_battery_table,
     ALL_STATUSES,
     STATUS_COLOR,
+    STATUS_TRIAGED,
+    STATUS_ACCEPTED,
     GRADE_EMOJI,
     DUMMY_USER,
     API_BASE_URL,
@@ -462,14 +465,14 @@ st.markdown(
         .st-key-hazard_pills div[data-baseweb="button-group"] {
             display: grid !important;
             grid-template-columns: repeat(5, 1fr) !important;
-            width: 66.7% !important;
-            max-width: 66.7% !important;
+            width: 100% !important;
+            max-width: 100% !important;
             flex-wrap: nowrap !important;
             gap: 8px !important;
         }
         .st-key-hazard_pills button[data-testid^="stBaseButton-pills"] {
             width: 100% !important;
-            aspect-ratio: 4 / 3 !important;
+            aspect-ratio: 2 / 1 !important;
             height: auto !important;
             min-height: 0 !important;
             max-height: none !important;
@@ -492,10 +495,9 @@ st.markdown(
             color: var(--c-warning-foreground) !important;
         }
 
-        /* 배터리 등록/판정 버튼 행 — 카드형 배경/테두리가 전역 규칙(아래
+        /* 배터리 판정 버튼 — 카드형 배경/테두리가 전역 규칙(아래
            stVerticalBlockBorderWrapper)에 의해 자동으로 씌워지는 것을 제거.
            버튼에 준 key를 통해 해당 버튼을 포함하는 래퍼를 찾아 무력화 */
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-reg_battery_btn),
         div[data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-judge_battery_btn) {
             border: none !important;
             background: transparent !important;
@@ -951,12 +953,12 @@ if st.session_state.page == "battery_list":
     import streamlit.components.v1 as components
 
     ROWS_JS         = _json.dumps(batteries_to_table_rows(batteries) if batteries else [])
-    BULK_STATUS_JS  = _json.dumps(["승인 전","승인 완료","수거 예정","완료"])
+    BULK_STATUS_JS  = _json.dumps(["처리 요청","처리 수락","수거 예정","수거 완료"])
     STATUS_OPTIONS_JS = _json.dumps(ALL_STATUSES)
     GRADE_OPTIONS_JS  = _json.dumps(["전체", "Green", "Yellow", "Orange", "Gray", "Red", "미판정"])
     STATUS_COLOR_JS = _json.dumps({
-        "판정 전": "#9aa5b1", "승인 전": "#f3821d", "승인 완료": "#00b5b5",
-        "수거 예정": "#142f4b", "완료": "#2e9e5b", "지정폐기물": "#7a1f1f",
+        "판정": "#9aa5b1", "처리 요청": "#f3821d", "처리 수락": "#00b5b5",
+        "수거 예정": "#142f4b", "수거 완료": "#2e9e5b", "지정폐기물": "#7a1f1f",
     })
     GRADE_COLOR_JS = _json.dumps({
         "Green": "#2e9e5b", "Yellow": "#f3821d", "Orange": "#e07a1f",
@@ -1046,6 +1048,10 @@ input[type=checkbox] {{ width:14px; height:14px; cursor:pointer; accent-color:#0
       <label>배터리 제조사</label>
       <input id="q-mfr" type="text" placeholder="제조사 입력"/>
     </div>
+    <div class="filter-field">
+      <label>추천업체</label>
+      <input id="q-company" type="text" placeholder="업체명 입력"/>
+    </div>
   </div>
   <div class="filter-row">
     <div class="filter-field">
@@ -1055,6 +1061,14 @@ input[type=checkbox] {{ width:14px; height:14px; cursor:pointer; accent-color:#0
     <div class="filter-field">
       <label>상태</label>
       <select id="sf"></select>
+    </div>
+    <div class="filter-field">
+      <label>입고일</label>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <input id="q-date-from" type="date" style="width:140px;"/>
+        <span style="color:#9ca3af; font-size:12px;">~</span>
+        <input id="q-date-to" type="date" style="width:140px;"/>
+      </div>
     </div>
     <div class="filter-actions">
       <button class="btn btn-teal" id="search-btn">조회</button>
@@ -1080,7 +1094,7 @@ input[type=checkbox] {{ width:14px; height:14px; cursor:pointer; accent-color:#0
     <thead><tr>
       <th><input type="checkbox" id="chk-all"/></th>
       <th>접수번호</th><th>VIN</th><th>모델명</th><th>제조사</th>
-      <th>용량(kWh)</th><th>등급</th><th>상태</th><th>추천업체</th>
+      <th>용량(kWh)</th><th>등급</th><th>상태</th><th>추천업체</th><th>입고일</th>
     </tr></thead>
     <tbody id="tbody"></tbody>
   </table>
@@ -1104,7 +1118,7 @@ function badge(val, colorMap) {{
 }}
 
 function receiptNo(row) {{
-  const year = (row["등록일자"] || "----").slice(0, 4);
+  const year = (row["입고일"] || "----").slice(0, 4);
   return `B-${{year}}-${{String(row._id).padStart(4, "0")}}`;
 }}
 
@@ -1112,15 +1126,22 @@ function applyFilter() {{
   const vin = document.getElementById("q-vin").value.toLowerCase();
   const model = document.getElementById("q-model").value.toLowerCase();
   const mfr = document.getElementById("q-mfr").value.toLowerCase();
+  const company = document.getElementById("q-company").value.toLowerCase();
+  const dateFrom = document.getElementById("q-date-from").value;
+  const dateTo = document.getElementById("q-date-to").value;
   const g = document.getElementById("gf").value;
   const s = document.getElementById("sf").value;
   filtered = allRows.filter(r => {{
     const vinOk = !vin || (r.VIN||"").toLowerCase().includes(vin);
     const modelOk = !model || (r["모델명"]||"").toLowerCase().includes(model);
     const mfrOk = !mfr || (r["제조사"]||"").toLowerCase().includes(mfr);
+    const companyOk = !company || (r["추천업체"]||"").toLowerCase().includes(company);
+    const rDate = r["입고일"] || "";
+    const dateFromOk = !dateFrom || (rDate !== "—" && rDate >= dateFrom);
+    const dateToOk = !dateTo || (rDate !== "—" && rDate <= dateTo);
     const gOk = g === "전체" || r["등급"] === g;
     const sOk = s === "전체" || r["상태"] === s;
-    return vinOk && modelOk && mfrOk && gOk && sOk;
+    return vinOk && modelOk && mfrOk && companyOk && dateFromOk && dateToOk && gOk && sOk;
   }});
   checked = new Set();
   render();
@@ -1189,7 +1210,7 @@ async function deleteSelected() {{
 }}
 
 function downloadCSV() {{
-  const cols = ["접수번호","VIN","모델명","제조사","용량(kWh)","등급","상태","추천업체"];
+  const cols = ["접수번호","VIN","모델명","제조사","용량(kWh)","등급","상태","추천업체","입고일"];
   const rows = [cols.join(","), ...filtered.map(r => {{
     const withReceipt = Object.assign({{}}, r, {{"접수번호": receiptNo(r)}});
     return cols.map(c => `"${{String(withReceipt[c]||"").replace(/"/g,'""')}}"`).join(",");
@@ -1212,7 +1233,7 @@ function render() {{
 
   const tbody = document.getElementById("tbody");
   if (filtered.length === 0) {{
-    tbody.innerHTML = `<tr><td colspan="9" class="empty">조건에 맞는 배터리가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" class="empty">조건에 맞는 배터리가 없습니다.</td></tr>`;
   }} else {{
     tbody.innerHTML = filtered.map(r => `
       <tr class="${{checked.has(r._id) ? 'sel' : ''}}" onclick="toggleRow(${{r._id}})">
@@ -1227,6 +1248,7 @@ function render() {{
         <td>${{badge(r['등급'], GC)}}</td>
         <td>${{badge(r['상태'], SC)}}</td>
         <td>${{r['추천업체']||'—'}}</td>
+        <td>${{r['입고일']||'—'}}</td>
       </tr>`).join("");
   }}
   document.getElementById("chk-all").checked = allChk;
@@ -1257,6 +1279,9 @@ window.onload = function() {{
     document.getElementById("q-vin").value = "";
     document.getElementById("q-model").value = "";
     document.getElementById("q-mfr").value = "";
+    document.getElementById("q-company").value = "";
+    document.getElementById("q-date-from").value = "";
+    document.getElementById("q-date-to").value = "";
     document.getElementById("gf").value = "전체";
     document.getElementById("sf").value = "전체";
     applyFilter();
@@ -1270,9 +1295,94 @@ window.onload = function() {{
 </body>
 </html>"""
 
+    # -----------------------------------------------------------------
+    # 처리 요청 — 커스텀 HTML 테이블(iframe)은 Streamlit과 값을 직접
+    # 주고받을 수 없어(로컬 환경에 따라 top-navigation이 막히기도 함),
+    # 순수 Streamlit 위젯으로 별도 구성한다. "판정" 상태인 배터리만
+    # 대상으로 하며, 클릭 즉시 "처리 수락" 상태로 전환 후 처리완료
+    # 페이지로 이동한다.
+    # -----------------------------------------------------------------
+    requestable = [b for b in (batteries or []) if b["status"] == STATUS_TRIAGED]
+    if requestable:
+        req_card = st.container(border=False, key="card_request_processing")
+        with req_card:
+            st.markdown(
+                """
+                <div class="section-title-row">
+                    <div class="section-title-left">
+                        <p class="section-title-text">처리 요청</p>
+                    </div>
+                </div>
+                <p class="section-desc">판정이 끝난 배터리를 선택하고 처리 요청을 보내면, 즉시 처리 수락 상태로 전환되고 처리 완료 화면으로 이동합니다.</p>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            req_labels = [
+                f"{b['vin']} · {b['model_name'] or '모델명 미입력'} · {b['grade'] or '미판정'}등급 (#{b['id']})"
+                for b in requestable
+            ]
+            req_col1, req_col2 = st.columns([3, 1])
+            with req_col1:
+                selected_label = st.selectbox(
+                    "처리 요청할 배터리",
+                    req_labels,
+                    label_visibility="collapsed",
+                    key="request_battery_select",
+                )
+            with req_col2:
+                if st.button("처리 요청", use_container_width=True, type="primary", key="request_processing_btn"):
+                    target = requestable[req_labels.index(selected_label)]
+                    detail = fetch_battery_detail(target["id"])
+                    if detail is None:
+                        st.error("배터리 정보를 불러오지 못했습니다.")
+                    else:
+                        request_processing(target["id"])
+                        st.session_state.intake_record = {
+                            "identification": {
+                                "vin": detail.get("vin"),
+                                "model_name": detail.get("model_name"),
+                                "battery_manufacturer": detail.get("battery_manufacturer"),
+                                "serial_number": None,
+                                "capacity_kwh": detail.get("capacity_kwh"),
+                            },
+                            "vehicle_info": {
+                                "model_year": None,
+                                "mileage_km": 0,
+                                "quantity": 1,
+                                "chemistry": detail.get("chemistry"),
+                            },
+                            "condition_flags": {
+                                "flooded": False, "leakage": False, "overheated": False,
+                                "swollen": False, "impact": False,
+                            },
+                            "channel": {
+                                "name": DUMMY_USER["channel_name"],
+                                "type": DUMMY_USER["channel_type"],
+                            },
+                        }
+                        st.session_state.triage_result = {
+                            "grade": detail.get("grade"),
+                            "soh_proxy_score": detail.get("soh_proxy_score"),
+                            "reuse_score": detail.get("reuse_score"),
+                            "recycle_score": detail.get("recycle_score"),
+                            "recommended_path": detail.get("recommended_path"),
+                            "data_confidence": detail.get("data_confidence"),
+                            "triage_id": detail.get("id"),
+                        }
+                        st.session_state.matching_result = {
+                            "status": "matched",
+                            "matched_companies": detail.get("matched_companies", []),
+                        }
+                        st.session_state.page = "intake"
+                        st.session_state.step = "completed"
+                        st.rerun()
+        st.markdown("<div style='margin-top:14px;'></div>", unsafe_allow_html=True)
+
     n_rows = len(batteries) if batteries else 0
-    react_height = max(420, 280 + n_rows * 40) if n_rows > 0 else 340
+    react_height = max(480, 340 + n_rows * 40) if n_rows > 0 else 400
     components.html(react_html, height=react_height, scrolling=False)
+
 
     # 상세보기는 기존 Streamlit dialog 활용
     if st.session_state.get("selected_battery_id") and st.session_state.get("show_detail_panel"):
@@ -1856,120 +1966,109 @@ elif st.session_state.page == "intake":
         )
 
         # ------------------------------------------------------------------
-        # 등록 / 판정 버튼 분리
-        #   - 배터리 등록: 현재는 껍데기(자리만 차지) — API 연결은 추후 진행
-        #   - 배터리 판정: 기존 "배터리 판정 시작" 버튼 로직 그대로 유지
-        #     (등록 버튼과 무관하게 단독으로 등록+판정을 모두 수행)
+        # 배터리 판정 버튼 (등록 버튼은 제거 — 판정 버튼 하나로 등록+판정+매칭 수행)
         # ------------------------------------------------------------------
-        reg_col, judge_col = st.columns(2)
+        if st.button("배터리 판정", use_container_width=True, type="primary", key="judge_battery_btn"):
+            errors = []
+            if not vin:
+                errors.append("차대번호(VIN)는 필수 입력 항목입니다.")
+            if capacity_kwh <= 0:
+                errors.append("배터리 용량은 0보다 큰 값을 입력해야 합니다.")
 
-        with reg_col:
-            if st.button("배터리 등록", use_container_width=True, key="reg_battery_btn"):
-                # TODO: 등록 전용 API 연결 예정 (예: POST /battery, 상태값 "판정 전"으로 저장)
-                st.info("배터리 등록 기능은 준비 중입니다. 판정을 진행해주세요.")
-
-        with judge_col:
-            if st.button("배터리 판정", use_container_width=True, type="primary", key="judge_battery_btn"):
-                errors = []
-                if not vin:
-                    errors.append("차대번호(VIN)는 필수 입력 항목입니다.")
-                if capacity_kwh <= 0:
-                    errors.append("배터리 용량은 0보다 큰 값을 입력해야 합니다.")
-
-                if errors:
-                    for e in errors:
-                        st.error(e)
-                else:
-                    intake_record = {
-                        "identification": {
-                            "vin": vin,
-                            "model_name": model_name or None,
-                            "battery_manufacturer": manufacturer or None,
-                            "serial_number": serial_number or None,
-                            "capacity_kwh": capacity_kwh,
-                        },
-                        "vehicle_info": {
-                            "model_year": None if model_year == "선택" else int(model_year),
-                            "mileage_km": mileage_km,
-                            "quantity": quantity,
-                            "chemistry": None if chemistry == "선택" else chemistry,
-                        },
-                        "condition_flags": {
-                            "flooded": "침수" in selected_conditions,
-                            "leakage": "누액" in selected_conditions,
-                            "overheated": "과열" in selected_conditions,
-                            "swollen": "팽창" in selected_conditions,
-                            "impact": "충격" in selected_conditions,
-                        },
-                        "channel": {
-                            "name": st.session_state.channel_name,
-                            "type": st.session_state.channel_type,
-                        },
-                    }
-
-                    st.session_state.intake_record = intake_record
-
-                    # 발생채널별 임시 좌표 (실제 채널 주소 DB가 없어 시연용으로 고정값 사용)
-                    CHANNEL_COORDS = {
-                        "강남폐차센터": (37.4979, 127.0276),
-                        "수원폐차센터": (37.2636, 127.0286),
-                        "인천폐차센터": (37.4563, 126.7052),
-                    }
-                    origin_lat, origin_lon = CHANNEL_COORDS.get(
-                        st.session_state.channel_name, (37.5665, 126.9780)  # 기본값: 서울시청
-                    )
-
-                    triage_payload = {
+            if errors:
+                for e in errors:
+                    st.error(e)
+            else:
+                intake_record = {
+                    "identification": {
                         "vin": vin,
-                        "vehicle_year": intake_record["vehicle_info"]["model_year"],
-                        "mileage_km": mileage_km,
-                        "capacity_kwh": capacity_kwh,
-                        "chemistry": intake_record["vehicle_info"]["chemistry"] or "UNKNOWN",
-                        "manufacturer": manufacturer or None,
                         "model_name": model_name or None,
-                        "battery_count": quantity or 1,
-                        "condition_flags": intake_record["condition_flags"],
-                    }
+                        "battery_manufacturer": manufacturer or None,
+                        "serial_number": serial_number or None,
+                        "capacity_kwh": capacity_kwh,
+                    },
+                    "vehicle_info": {
+                        "model_year": None if model_year == "선택" else int(model_year),
+                        "mileage_km": mileage_km,
+                        "quantity": quantity,
+                        "chemistry": None if chemistry == "선택" else chemistry,
+                    },
+                    "condition_flags": {
+                        "flooded": "침수" in selected_conditions,
+                        "leakage": "누액" in selected_conditions,
+                        "overheated": "과열" in selected_conditions,
+                        "swollen": "팽창" in selected_conditions,
+                        "impact": "충격" in selected_conditions,
+                    },
+                    "channel": {
+                        "name": st.session_state.channel_name,
+                        "type": st.session_state.channel_type,
+                    },
+                }
 
-                    try:
-                        triage_res = requests.post(
-                            f"{API_BASE_URL}/triage", json=triage_payload, timeout=15
-                        )
-                        triage_res.raise_for_status()
-                        triage_result = triage_res.json()
-                    except requests.RequestException as e:
-                        st.error(f"배터리 판정 요청에 실패했습니다: {e}")
-                        st.stop()
+                st.session_state.intake_record = intake_record
 
-                    grade = triage_result.get("grade")
+                # 발생채널별 임시 좌표 (실제 채널 주소 DB가 없어 시연용으로 고정값 사용)
+                CHANNEL_COORDS = {
+                    "강남폐차센터": (37.4979, 127.0276),
+                    "수원폐차센터": (37.2636, 127.0286),
+                    "인천폐차센터": (37.4563, 126.7052),
+                }
+                origin_lat, origin_lon = CHANNEL_COORDS.get(
+                    st.session_state.channel_name, (37.5665, 126.9780)  # 기본값: 서울시청
+                )
 
-                    if grade == "Red":
-                        st.warning("지정폐기물 판정 - 특별 처리 업체로 매칭합니다.")
+                triage_payload = {
+                    "vin": vin,
+                    "vehicle_year": intake_record["vehicle_info"]["model_year"],
+                    "mileage_km": mileage_km,
+                    "capacity_kwh": capacity_kwh,
+                    "chemistry": intake_record["vehicle_info"]["chemistry"] or "UNKNOWN",
+                    "manufacturer": manufacturer or None,
+                    "model_name": model_name or None,
+                    "battery_count": quantity or 1,
+                    "condition_flags": intake_record["condition_flags"],
+                }
 
-                    triage_id = triage_result.get("triage_id")
+                try:
+                    triage_res = requests.post(
+                        f"{API_BASE_URL}/triage", json=triage_payload, timeout=15
+                    )
+                    triage_res.raise_for_status()
+                    triage_result = triage_res.json()
+                except requests.RequestException as e:
+                    st.error(f"배터리 판정 요청에 실패했습니다: {e}")
+                    st.stop()
 
-                    try:
-                        match_res = requests.post(
-                            f"{API_BASE_URL}/match",
-                            json={
-                                "triage_result": triage_result,
-                                "origin_latitude": origin_lat,
-                                "origin_longitude": origin_lon,
-                                "max_results": 3,
-                                "triage_id": triage_id,
-                            },
-                            timeout=15,
-                        )
-                        match_res.raise_for_status()
-                        matching_result = match_res.json()
-                    except requests.RequestException as e:
-                        st.error(f"처리업체 매칭 요청에 실패했습니다: {e}")
-                        matching_result = {"status": "no_match", "matched_companies": [], "grade": grade}
+                grade = triage_result.get("grade")
 
-                    st.session_state.triage_result = triage_result
-                    st.session_state.matching_result = matching_result
-                    st.session_state.step = "approval"
-                    st.rerun()
+                if grade == "Red":
+                    st.warning("지정폐기물 판정 - 특별 처리 업체로 매칭합니다.")
+
+                triage_id = triage_result.get("triage_id")
+
+                try:
+                    match_res = requests.post(
+                        f"{API_BASE_URL}/match",
+                        json={
+                            "triage_result": triage_result,
+                            "origin_latitude": origin_lat,
+                            "origin_longitude": origin_lon,
+                            "max_results": 3,
+                            "triage_id": triage_id,
+                        },
+                        timeout=15,
+                    )
+                    match_res.raise_for_status()
+                    matching_result = match_res.json()
+                except requests.RequestException as e:
+                    st.error(f"처리업체 매칭 요청에 실패했습니다: {e}")
+                    matching_result = {"status": "no_match", "matched_companies": [], "grade": grade}
+
+                st.session_state.triage_result = triage_result
+                st.session_state.matching_result = matching_result
+                st.session_state.step = "approval"
+                st.rerun()
 
         st.markdown(
             """
@@ -1988,8 +2087,8 @@ elif st.session_state.page == "intake":
             f"""
             <div class="list-header">
                 <div class="list-header-left">
-                    <p class="list-header-sub">판정 결과 확인</p>
-                    <p class="list-header-title">담당자 승인</p>
+                    <p class="list-header-title">판정 결과</p>
+                    <p class="list-header-sub">배터리 판정 결과 및 처리업체 매칭 확인</p>
                 </div>
                 <div style="display:flex; align-items:center; gap:10px;">
                     <div class="list-header-user">
@@ -2007,107 +2106,111 @@ elif st.session_state.page == "intake":
         triage_result = st.session_state.triage_result
         matching_result = st.session_state.matching_result
 
-        card_info = st.container(border=False, key="card_approval_info")
-        with card_info:
-            st.markdown(
-                """
-                <div class="section-title-row">
-                    <div class="section-title-left">
-                        <div class="section-num">01</div>
-                        <p class="section-title-text">배터리 정보</p>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        col_info, col_triage = st.columns(2, gap="small")
 
-            st.markdown(
-                f"""
-                <div class="info-card">
-                    <div class="info-card-row">
-                        <div class="info-item">
-                            <span class="info-label">VIN</span>
-                            <span class="info-value">{intake_record['identification']['vin']}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">연식</span>
-                            <span class="info-value">{intake_record['vehicle_info']['model_year'] or '미입력'}년</span>
+        with col_info:
+            card_info = st.container(border=False, key="card_approval_info")
+            with card_info:
+                st.markdown(
+                    """
+                    <div class="section-title-row">
+                        <div class="section-title-left">
+                            <div class="section-num">01</div>
+                            <p class="section-title-text">배터리 정보</p>
                         </div>
                     </div>
-                    <div class="info-card-row">
-                        <div class="info-item">
-                            <span class="info-label">모델명</span>
-                            <span class="info-value">{intake_record['identification']['model_name'] or '미입력'}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">주행거리</span>
-                            <span class="info-value">{intake_record['vehicle_info']['mileage_km']:,} km</span>
-                        </div>
-                    </div>
-                    <div class="info-card-row">
-                        <div class="info-item">
-                            <span class="info-label">제조사</span>
-                            <span class="info-value">{intake_record['identification']['battery_manufacturer'] or '미입력'}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">용량</span>
-                            <span class="info-value">{intake_record['identification']['capacity_kwh']} kWh</span>
-                        </div>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                    """,
+                    unsafe_allow_html=True,
+                )
 
-        card_triage = st.container(border=False, key="card_approval_triage")
-        with card_triage:
-            st.markdown(
-                """
-                <div class="section-title-row">
-                    <div class="section-title-left">
-                        <div class="section-num">02</div>
-                        <p class="section-title-text">Triage 판정</p>
+                st.markdown(
+                    f"""
+                    <div class="info-card">
+                        <div class="info-card-row">
+                            <div class="info-item">
+                                <span class="info-label">VIN</span>
+                                <span class="info-value">{intake_record['identification']['vin']}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">연식</span>
+                                <span class="info-value">{intake_record['vehicle_info']['model_year'] or '미입력'}년</span>
+                            </div>
+                        </div>
+                        <div class="info-card-row">
+                            <div class="info-item">
+                                <span class="info-label">모델명</span>
+                                <span class="info-value">{intake_record['identification']['model_name'] or '미입력'}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">주행거리</span>
+                                <span class="info-value">{intake_record['vehicle_info']['mileage_km']:,} km</span>
+                            </div>
+                        </div>
+                        <div class="info-card-row">
+                            <div class="info-item">
+                                <span class="info-label">제조사</span>
+                                <span class="info-value">{intake_record['identification']['battery_manufacturer'] or '미입력'}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">용량</span>
+                                <span class="info-value">{intake_record['identification']['capacity_kwh']} kWh</span>
+                            </div>
+                        </div>
                     </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                    """,
+                    unsafe_allow_html=True,
+                )
 
-            grade_emoji = {"Green": "", "Yellow": "", "Orange": "", "Gray": "", "Red": ""}
-            path_label = {
-                "reuse_candidate": "재사용 후보",
-                "reuse_or_recycle_after_diagnosis": "추가진단 후 판단",
-                "recycle_candidate": "재활용 후보",
-                "diagnosis_required": "정밀진단 필요",
-                "designated_waste": "지정폐기물 처리",
-            }.get(triage_result['recommended_path'], triage_result['recommended_path'])
-            st.markdown(
-                f"""
-                <div class="info-card">
-                    <div class="info-card-row">
-                        <div class="info-item">
-                            <span class="info-label">SOH Proxy</span>
-                            <span class="info-value">{f"{triage_result['soh_proxy_score']}%" if triage_result.get('soh_proxy_score') is not None else "—"}</span>
-                        </div>
-                        <div class="info-item">
-                            <span class="info-label">등급</span>
-                            <span class="info-value">{grade_emoji.get(triage_result['grade'], '')} {triage_result['grade']}</span>
+        with col_triage:
+            card_triage = st.container(border=False, key="card_approval_triage")
+            with card_triage:
+                st.markdown(
+                    """
+                    <div class="section-title-row">
+                        <div class="section-title-left">
+                            <div class="section-num">02</div>
+                            <p class="section-title-text">Triage 판정</p>
                         </div>
                     </div>
-                    <div class="info-card-row">
-                        <div class="info-item">
-                            <span class="info-label">처리 방향</span>
-                            <span class="info-value">{path_label}</span>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                grade_emoji = {"Green": "", "Yellow": "", "Orange": "", "Gray": "", "Red": ""}
+                path_label = {
+                    "reuse_candidate": "재사용 후보",
+                    "reuse_or_recycle_after_diagnosis": "추가진단 후 판단",
+                    "recycle_candidate": "재활용 후보",
+                    "diagnosis_required": "정밀진단 필요",
+                    "designated_waste": "지정폐기물 처리",
+                }.get(triage_result['recommended_path'], triage_result['recommended_path'])
+                st.markdown(
+                    f"""
+                    <div class="info-card">
+                        <div class="info-card-row">
+                            <div class="info-item">
+                                <span class="info-label">SOH Proxy</span>
+                                <span class="info-value">{f"{triage_result['soh_proxy_score']}%" if triage_result.get('soh_proxy_score') is not None else "—"}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">등급</span>
+                                <span class="info-value">{grade_emoji.get(triage_result['grade'], '')} {triage_result['grade']}</span>
+                            </div>
                         </div>
-                        <div class="info-item">
-                            <span class="info-label">화학계</span>
-                            <span class="info-value">{intake_record['vehicle_info']['chemistry'] or 'UNKNOWN'}</span>
+                        <div class="info-card-row">
+                            <div class="info-item">
+                                <span class="info-label">처리 방향</span>
+                                <span class="info-value">{path_label}</span>
+                            </div>
+                            <div class="info-item">
+                                <span class="info-label">화학계</span>
+                                <span class="info-value">{intake_record['vehicle_info']['chemistry'] or 'UNKNOWN'}</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                    """,
+                    unsafe_allow_html=True,
+                )
 
         card_matching = st.container(border=False, key="card_approval_matching")
         with card_matching:
@@ -2134,35 +2237,36 @@ elif st.session_state.page == "intake":
                     unsafe_allow_html=True,
                 )
 
-            for company in matched_companies:
-                st.markdown(
-                    f"""
-                    <div style="background-color: var(--c-card); border: 1.5px solid var(--c-border); border-radius: 12px; padding: 14px; margin-bottom: 10px;">
-                        <div style="font-size: 12px; font-weight: 700; color: var(--c-primary); margin-bottom: 6px;">{company['rank']}순위</div>
-                        <div style="font-size: 14px; font-weight: 700; color: var(--c-foreground); margin-bottom: 4px;">{company['company_name']}</div>
-                        <div style="font-size: 11px; color: var(--c-muted-foreground); margin-bottom: 10px;">지역: {company['region']} | 거리: {company['distance_km']}km</div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-                            <div style="background-color: var(--c-secondary); padding: 7px; border-radius: 8px; text-align: center;">
-                                <div style="font-size: 9px; font-weight: 600; color: var(--c-muted-foreground);">점수</div>
-                                <div style="font-size: 12px; font-weight: 700; color: var(--c-foreground);">{company['total_score']:.1f}</div>
-                            </div>
-                            <div style="background-color: var(--c-secondary); padding: 7px; border-radius: 8px; text-align: center;">
-                                <div style="font-size: 9px; font-weight: 600; color: var(--c-muted-foreground);">진단역량</div>
-                                <div style="font-size: 12px; font-weight: 700; color: var(--c-foreground);">{company['diagnostic_capability'].upper()}</div>
-                            </div>
-                            <div style="background-color: var(--c-secondary); padding: 7px; border-radius: 8px; text-align: center;">
-                                <div style="font-size: 9px; font-weight: 600; color: var(--c-muted-foreground);">처리유형</div>
-                                <div style="font-size: 12px; font-weight: 700; color: var(--c-foreground);">{company['process_type']}</div>
-                            </div>
-                            <div style="background-color: var(--c-secondary); padding: 7px; border-radius: 8px; text-align: center;">
-                                <div style="font-size: 9px; font-weight: 600; color: var(--c-muted-foreground);">상태</div>
-                                <div style="font-size: 12px; font-weight: 700; color: var(--c-foreground);">운영중</div>
+            for company, col in zip(matched_companies, st.columns(len(matched_companies), gap="small")):
+                with col:
+                    st.markdown(
+                        f"""
+                        <div style="background-color: var(--c-card); border: 1.5px solid var(--c-border); border-radius: 12px; padding: 14px; margin-bottom: 10px; height: 100%;">
+                            <div style="font-size: 12px; font-weight: 700; color: var(--c-primary); margin-bottom: 6px;">{company['rank']}순위</div>
+                            <div style="font-size: 14px; font-weight: 700; color: var(--c-foreground); margin-bottom: 4px;">{company['company_name']}</div>
+                            <div style="font-size: 11px; color: var(--c-muted-foreground); margin-bottom: 10px;">지역: {company['region']} | 거리: {company['distance_km']}km</div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
+                                <div style="background-color: var(--c-secondary); padding: 7px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 9px; font-weight: 600; color: var(--c-muted-foreground);">점수</div>
+                                    <div style="font-size: 12px; font-weight: 700; color: var(--c-foreground);">{company['total_score']:.1f}</div>
+                                </div>
+                                <div style="background-color: var(--c-secondary); padding: 7px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 9px; font-weight: 600; color: var(--c-muted-foreground);">진단역량</div>
+                                    <div style="font-size: 12px; font-weight: 700; color: var(--c-foreground);">{company['diagnostic_capability'].upper()}</div>
+                                </div>
+                                <div style="background-color: var(--c-secondary); padding: 7px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 9px; font-weight: 600; color: var(--c-muted-foreground);">처리유형</div>
+                                    <div style="font-size: 12px; font-weight: 700; color: var(--c-foreground);">{company['process_type']}</div>
+                                </div>
+                                <div style="background-color: var(--c-secondary); padding: 7px; border-radius: 8px; text-align: center;">
+                                    <div style="font-size: 9px; font-weight: 600; color: var(--c-muted-foreground);">상태</div>
+                                    <div style="font-size: 12px; font-weight: 700; color: var(--c-foreground);">운영중</div>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                        """,
+                        unsafe_allow_html=True,
+                    )
 
             # 지도 표시 (매칭된 업체가 있고 좌표가 있을 때)
             if matched_companies and any(c.get('latitude') and c.get('longitude') for c in matched_companies):
@@ -2226,7 +2330,7 @@ elif st.session_state.page == "intake":
                 st_folium(m, width="100%", height=340, returned_objects=[])
 
         st.markdown("<br>", unsafe_allow_html=True)
-        col1, col2, col3 = st.columns([1, 1, 1.2], gap="small")
+        col1, col2 = st.columns([1, 1], gap="small")
 
         with col1:
             if st.button("← 이전", use_container_width=True):
@@ -2234,18 +2338,13 @@ elif st.session_state.page == "intake":
                 st.rerun()
 
         with col2:
-            if st.button("저장", use_container_width=True):
-                # 현재 접수 건을 "승인 전" 상태로 저장하고 입력 화면으로 복귀
-                # (나중에 배터리 관리 페이지에서 승인 처리 가능)
+            if st.button("저장", use_container_width=True, type="primary"):
+                # 판정 시점에 이미 DB에 저장돼 배터리 관리 페이지에 등록된 상태이므로,
+                # 여기서는 입력 화면으로 복귀하며 현재 접수 건 세션만 정리한다.
                 st.session_state.step = "input"
                 st.session_state.intake_record = None
                 st.session_state.triage_result = None
                 st.session_state.matching_result = None
-                st.rerun()
-
-        with col3:
-            if st.button("승인 (최종 확정)", use_container_width=True, type="primary"):
-                st.session_state.step = "completed"
                 st.rerun()
 
     # =======================================================================
@@ -2272,7 +2371,7 @@ elif st.session_state.page == "intake":
             <div style="text-align: center; padding: 32px 16px;">
                 <div style="font-size: 64px; margin-bottom: 16px;"></div>
                 <p style="font-size: 20px; font-weight: 700; color: var(--c-foreground); margin-bottom: 6px;">처리 완료</p>
-                <p style="font-size: 13px; color: var(--c-muted-foreground); margin-bottom: 24px; line-height: 1.6;">배터리 판정 및 처리업체 매칭이<br/>완료되었습니다!</p>
+                <p style="font-size: 13px; color: var(--c-muted-foreground); margin-bottom: 24px; line-height: 1.6;">처리업체 매칭과 수락이<br/>완료되었습니다!</p>
             </div>
             """,
             unsafe_allow_html=True,
@@ -2306,11 +2405,9 @@ elif st.session_state.page == "intake":
             unsafe_allow_html=True,
         )
 
-        st.info("결과서 다운로드는 추후 추가 예정입니다")
-
-        # PDF 판정 결과서 다운로드
-        st.markdown("#### 판정 결과서 다운로드")
-        if st.button("PDF 결과서 생성", use_container_width=True):
+        # 처리 확인 매칭서 (PDF)
+        st.markdown("#### 처리 확인 매칭서")
+        if st.button("PDF 생성", use_container_width=True):
             try:
                 pdf_res = requests.post(
                     f"{API_BASE_URL}/pdf/triage",

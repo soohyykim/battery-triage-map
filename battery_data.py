@@ -4,12 +4,13 @@
 백엔드 엔드포인트:
   GET  /history                  -> 판정 이력 목록 (vin, matched_company_name 포함 예정)
   GET  /history/{id}             -> 판정 1건 상세 (matched_companies 포함)
-  POST /history/{id}/approve     -> 승인 처리
+  POST /history/{id}/approve     -> 처리 요청 수락 처리(내부적으로 approved_by 기록)
 
-주의: 백엔드 DB(HistoryItem)에는 channel_name(발생채널), 운영 status(요청/
-수거신청/완료/반려/지정폐기물) 개념이 없다. status는 approved_by 유무로
-"승인 전 / 승인됨"만 구분 가능하고, 그 이상의 세부 단계는 Streamlit
-session_state에서 화면상으로만 관리한다(새로고침하면 초기화됨).
+주의: 백엔드 DB(HistoryItem)에는 channel_name(발생채널), 운영 status(판정/
+처리 요청/처리 수락/수거 예정/수거 완료/지정폐기물) 개념이 없다. 백엔드가
+구분 가능한 건 approved_by 유무("처리 미수락 / 수락됨")뿐이고, 그 이상의
+세부 단계(판정/처리 요청/수거 예정/수거 완료)는 Streamlit session_state에서
+화면상으로만 관리한다(새로고침하면 초기화됨).
 """
 
 import os
@@ -23,30 +24,30 @@ import streamlit as st
 API_BASE_URL = os.environ.get("API_BASE_URL", "https://battery-triage-map-api.onrender.com")
 
 # ---------------------------------------------------------------------------
-# 상태 정의 (백엔드AI 요청 메시지와 동일한 5단계 + 예외 2개)
-# 실제로 백엔드가 구분 가능한 건 "승인 전 / 승인됨" 뿐이고, 나머지는
-# 프론트(session_state)에서만 관리하는 시연용 상태값이다.
+# 상태 정의: 판정 → 처리 요청 → 처리 수락 → 수거 예정 → 수거 완료
+# 백엔드가 실제로 구분 가능한 건 "판정됨 / 승인(approved_by)됨" 뿐이고,
+# 나머지 세부 단계는 프론트(session_state)에서만 관리하는 시연용 상태값이다.
 # ---------------------------------------------------------------------------
-STATUS_PENDING_TRIAGE = "판정 전"
-STATUS_PENDING_APPROVAL = "승인 전"
-STATUS_REQUESTED = "승인 완료"
+STATUS_TRIAGED = "판정"
+STATUS_REQUESTED = "처리 요청"
+STATUS_ACCEPTED = "처리 수락"
 STATUS_PICKUP_SCHEDULED = "수거 예정"
-STATUS_COMPLETED = "완료"
+STATUS_COMPLETED = "수거 완료"
 STATUS_DESIGNATED_WASTE = "지정폐기물"  # Red 등급 판정 시 내부 처리용 (목록엔 등급으로 표시)
 
 ALL_STATUSES = [
     "전체",
-    STATUS_PENDING_TRIAGE,
-    STATUS_PENDING_APPROVAL,
+    STATUS_TRIAGED,
     STATUS_REQUESTED,
+    STATUS_ACCEPTED,
     STATUS_PICKUP_SCHEDULED,
     STATUS_COMPLETED,
 ]
 
 STATUS_COLOR = {
-    STATUS_PENDING_TRIAGE: "#9aa5b1",
-    STATUS_PENDING_APPROVAL: "#f3821d",
-    STATUS_REQUESTED: "#00b5b5",
+    STATUS_TRIAGED: "#9aa5b1",
+    STATUS_REQUESTED: "#f3821d",
+    STATUS_ACCEPTED: "#00b5b5",
     STATUS_PICKUP_SCHEDULED: "#142f4b",
     STATUS_COMPLETED: "#2e9e5b",
     STATUS_DESIGNATED_WASTE: "#7a1f1f",
@@ -79,11 +80,7 @@ def _derive_status(item: dict) -> str:
     overrides = _status_overrides()
     if item["id"] in overrides:
         return overrides[item["id"]]
-    if not item.get("grade"):
-        return STATUS_PENDING_TRIAGE
-    if not item.get("approved_by"):
-        return STATUS_PENDING_APPROVAL
-    return STATUS_REQUESTED
+    return STATUS_TRIAGED
 
 
 def _normalize_item(item: dict) -> dict:
@@ -135,7 +132,7 @@ def fetch_battery_detail(battery_id):
 
 
 def update_battery_status(battery_id, new_status, note=""):
-    if new_status == STATUS_REQUESTED:
+    if new_status == STATUS_ACCEPTED:
         try:
             res = requests.post(
                 f"{API_BASE_URL}/history/{battery_id}/approve",
@@ -150,6 +147,15 @@ def update_battery_status(battery_id, new_status, note=""):
     overrides = _status_overrides()
     overrides[battery_id] = new_status
     return True
+
+
+def request_processing(battery_id):
+    """배터리 관리 페이지에서 '처리 요청' 버튼 클릭 시 호출.
+
+    실제 처리업체 수락/거절 흐름은 아직 미구현이라, 요청과 동시에
+    '처리 수락' 상태로 즉시 전이시키는 시연용 로직이다.
+    """
+    return update_battery_status(battery_id, STATUS_ACCEPTED)
 
 
 def delete_battery(battery_id):
@@ -201,7 +207,7 @@ def batteries_to_table_rows(batteries):
             "등급": b["grade"] or "미판정",
             "상태": b["status"],
             "추천업체": b["matched_company"] or "—",
-            "등록일자": (b["created_at"] or "")[:10] or "—",
+            "입고일": (b["created_at"] or "")[:10] or "—",  # 판정(Triage)이 완료된 날짜 = 배터리 입고일
             "발생채널": b["channel_name"] or "—",
             "_id": b["id"],
         })
