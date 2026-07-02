@@ -795,6 +795,10 @@ if st.session_state.page == "battery_list":
                     <p class="triage-header-text-sub">보유 배터리 현황 조회 및 상태 관리</p>
                 </div>
             </div>
+            <div class="triage-header-user">
+                <span class="triage-header-user-name">{DUMMY_USER['name']} 님</span>
+                <span class="triage-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1097,6 +1101,10 @@ elif st.session_state.page == "company":
                     <p class="triage-header-text-sub">배터리 처리 가능 업체 현황 및 위치</p>
                 </div>
             </div>
+            <div class="triage-header-user">
+                <span class="triage-header-user-name">{DUMMY_USER['name']} 님</span>
+                <span class="triage-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1318,7 +1326,6 @@ elif st.session_state.page == "settings":
         """,
         unsafe_allow_html=True,
     )
-    st.caption("아래 항목은 시연용 화면입니다. 실제 저장·적용 기능은 다음 단계에서 연결될 예정입니다.")
 
     # ── 계정 / 발생채널 정보 ─────────────────────────
     with st.container(border=True):
@@ -1414,7 +1421,6 @@ elif st.session_state.page == "settings":
 
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
     st.button("저장", use_container_width=True, type="primary", disabled=True, key="settings_save_stub")
-    st.caption("설정 저장 기능은 준비 중입니다.")
 
 
 elif st.session_state.page == "intake":
@@ -1430,6 +1436,10 @@ elif st.session_state.page == "intake":
                         <p class="triage-header-text-main">배터리 등록</p>
                         <p class="triage-header-text-sub">사용후 배터리 접수 및 자동 판정</p>
                     </div>
+                </div>
+                <div class="triage-header-user">
+                    <span class="triage-header-user-name">{DUMMY_USER['name']} 님</span>
+                    <span class="triage-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
                 </div>
             </div>
             """,
@@ -1828,7 +1838,13 @@ elif st.session_state.page == "intake":
                         <p class="triage-header-text-main">담당자 승인</p>
                     </div>
                 </div>
-                <div class="triage-channel-badge">최종 확인 단계</div>
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div class="triage-header-user">
+                        <span class="triage-header-user-name">{DUMMY_USER['name']} 님</span>
+                        <span class="triage-header-user-channel">{DUMMY_USER['channel_name']} · {DUMMY_USER['channel_type']}</span>
+                    </div>
+                    <div class="triage-channel-badge">최종 확인 단계</div>
+                </div>
             </div>
             """,
             unsafe_allow_html=True,
