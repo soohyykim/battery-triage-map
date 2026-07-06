@@ -17,6 +17,7 @@ Battery Triage Map - FastAPI 엔드포인트 4개.
 """
 from __future__ import annotations
 
+import time
 from functools import lru_cache
 from pathlib import Path
 
@@ -44,6 +45,7 @@ from services import triage as triage_svc
 from services import matching as matching_svc
 from services import db as db_svc
 from services import rule as rule_svc
+from services import mineral_price as mineral_price_svc
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 COMPANIES_CSV = BASE_DIR / "data" / "companies_mock.csv"
@@ -69,6 +71,33 @@ def load_companies() -> pd.DataFrame:
     if not COMPANIES_CSV.exists():
         return pd.DataFrame()
     return pd.read_csv(COMPANIES_CSV, encoding="utf-8-sig")
+
+
+# ---------------------------------------------------------------------------
+# 광물 가격(KOMIR) 입력값 캐시
+# 매 /triage, /score 요청마다 외부 API를 부르면 느려지고(3광물 x 최대 3초
+# 타임아웃) 불필요한 트래픽도 생기므로, 일정 시간(TTL) 동안은 캐시된 값을
+# 재사용한다. API 미설정/실패 시에도 mineral_price.py 자체가 안전하게
+# 기본값으로 대체하므로, 이 캐시가 없어도 서비스가 멈추지는 않는다.
+# ---------------------------------------------------------------------------
+_MINERAL_CACHE_TTL_SECONDS = 600  # 10분
+_mineral_cache: dict = {"data": None, "fetched_at": 0.0}
+
+
+def _get_mineral_price_inputs() -> dict:
+    now = time.time()
+    if _mineral_cache["data"] is None or (now - _mineral_cache["fetched_at"]) > _MINERAL_CACHE_TTL_SECONDS:
+        try:
+            _mineral_cache["data"] = mineral_price_svc.get_mineral_price_inputs()
+        except Exception as e:  # 광물 가격 조회 실패가 판정 자체를 막아서는 안 된다
+            print(f"[main] 광물 가격 조회 실패(내장 기본값으로 진행): {e}")
+            _mineral_cache["data"] = {
+                "mineral_price_scores": mineral_price_svc.DEFAULT_MINERAL_PRICE_SCORES.copy(),
+                "mineral_price_source": "fallback_default",
+                "mineral_price_details": {},
+            }
+        _mineral_cache["fetched_at"] = now
+    return _mineral_cache["data"]
 
 
 @app.get("/", tags=["health"])
@@ -101,6 +130,8 @@ def _build_designated_waste_result(req: BatteryInput, rule_result: dict) -> dict
             "battery_count": req.battery_count,
         },
         "soh_proxy_score": None,
+        "capacity_score": None,
+        "mineral_value_score": None,
         "reuse_score": None,
         "recycle_score": None,
         "grade": "Red",
@@ -108,6 +139,8 @@ def _build_designated_waste_result(req: BatteryInput, rule_result: dict) -> dict
         "required_diagnostic_capability": "none",
         "collection_route": "지정폐기물 처리 루트",
         "data_confidence": None,
+        "mineral_price_source": None,
+        "mineral_price_scores_used": None,
         "reason_codes": rule_result["reason_codes"],
     }
 
@@ -125,7 +158,8 @@ def triage(req: BatteryInput):
     if rule_result["is_designated_waste"]:
         result = _build_designated_waste_result(req, rule_result)
     else:
-        # 2) 정상 통과 -> 기존 triage.py 평가
+        # 2) 정상 통과 -> 기존 triage.py 평가 (+ KOMIR 광물 가격 점수 반영)
+        mineral_inputs = _get_mineral_price_inputs()
         result = triage_svc.evaluate_battery(
             vehicle_year=req.vehicle_year,
             mileage_km=req.mileage_km,
@@ -135,6 +169,8 @@ def triage(req: BatteryInput):
             model_name=req.model_name,
             battery_count=req.battery_count,
             current_year=req.current_year,
+            mineral_price_scores=mineral_inputs["mineral_price_scores"],
+            mineral_price_source=mineral_inputs["mineral_price_source"],
         )
 
     # 판정 결과를 이력 DB에 저장하고, 발급된 id를 응답에 실어 보낸다.
@@ -164,6 +200,7 @@ def score(req: BatteryInput):
             "data_confidence": None,
         }
 
+    mineral_inputs = _get_mineral_price_inputs()
     result = triage_svc.evaluate_battery(
         vehicle_year=req.vehicle_year,
         mileage_km=req.mileage_km,
@@ -173,6 +210,8 @@ def score(req: BatteryInput):
         model_name=req.model_name,
         battery_count=req.battery_count,
         current_year=req.current_year,
+        mineral_price_scores=mineral_inputs["mineral_price_scores"],
+        mineral_price_source=mineral_inputs["mineral_price_source"],
     )
     return {
         "grade": result["grade"],

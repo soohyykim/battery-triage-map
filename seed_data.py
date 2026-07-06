@@ -20,7 +20,7 @@ from pathlib import Path
 import pandas as pd
 import requests
 
-API_BASE_URL = "https://battery-triage-map-api-ve2w.onrender.com"
+API_BASE_URL = "https://battery-triage-map-api.onrender.com"
 
 # 발생채널별 시연용 좌표
 CHANNEL_COORDS = {

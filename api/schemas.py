@@ -66,6 +66,12 @@ class TriageResponse(BaseModel):
     result_type: str = Field(..., description="preliminary_estimate (법적 최종판정 아님)")
     input_summary: Dict[str, Any]
     soh_proxy_score: Optional[float] = None
+    capacity_score: Optional[float] = Field(
+        None, description="배터리 용량 기반 점수 (evaluate_battery() 산출값)"
+    )
+    mineral_value_score: Optional[float] = Field(
+        None, description="화학계별 광물 회수 가치 점수 (KOMIR 가격 반영)"
+    )
     reuse_score: Optional[float] = None
     recycle_score: Optional[float] = None
     grade: str = Field(..., description="Green / Yellow / Orange / Gray / Red")
@@ -73,6 +79,12 @@ class TriageResponse(BaseModel):
     required_diagnostic_capability: str = Field(..., description="none / basic / kolas")
     collection_route: str
     data_confidence: Optional[float] = Field(None, description="입력 완성도 0~1")
+    mineral_price_source: Optional[str] = Field(
+        None, description="api / fallback_default / api_partial_fallback / external 등 (KOMIR 가격 출처)"
+    )
+    mineral_price_scores_used: Optional[Dict[str, float]] = Field(
+        None, description="실제 반영된 LITHIUM/NICKEL/COBALT 0~100 정규화 점수"
+    )
     reason_codes: List[str] = Field(default_factory=list)
     triage_id: Optional[int] = Field(
         None, description="DB에 저장된 판정 이력 id (/match·관리페이지에서 사용)"
@@ -160,6 +172,8 @@ class HistoryItem(BaseModel):
     chemistry: Optional[str] = None
     battery_count: Optional[int] = None
     soh_proxy_score: Optional[float] = None
+    capacity_score: Optional[float] = None
+    mineral_value_score: Optional[float] = None
     reuse_score: Optional[float] = None
     recycle_score: Optional[float] = None
     data_confidence: Optional[float] = None
@@ -167,6 +181,10 @@ class HistoryItem(BaseModel):
     recommended_path: Optional[str] = None
     required_diagnostic_capability: Optional[str] = None
     collection_route: Optional[str] = None
+    mineral_price_source: Optional[str] = None
+    mineral_price_scores_used: Optional[str] = Field(
+        None, description="JSON 문자열로 저장된 LITHIUM/NICKEL/COBALT 점수"
+    )
     reason_codes: Optional[str] = None
     origin_latitude: Optional[float] = None
     origin_longitude: Optional[float] = None

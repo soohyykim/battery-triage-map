@@ -2,7 +2,6 @@
 data/battery.db
 data/chroma/
 data/chroma_db/
-data/policies/*.pdf
 outputs/
 !outputs/.gitkeep
 assets/*.ttf
@@ -13,3 +12,6 @@ venv/
 .DS_Store
 Thumbs.db
 !assets/NanumGothic.ttf
+.battery_channel_assignments.json
+.battery_pending_registrations.json
+.battery_status_overrides.json

@@ -18,6 +18,7 @@ DB 영속 계층 (백엔드/AI 담당) — SQLAlchemy 기반, SQLite/PostgreSQL 
 """
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime
 from pathlib import Path
@@ -61,6 +62,8 @@ triage_history = Table(
     Column("chemistry", String),
     Column("battery_count", Integer, default=1),
     Column("soh_proxy_score", Float),
+    Column("capacity_score", Float),
+    Column("mineral_value_score", Float),
     Column("reuse_score", Float),
     Column("recycle_score", Float),
     Column("data_confidence", Float),
@@ -68,6 +71,8 @@ triage_history = Table(
     Column("recommended_path", String),
     Column("required_diagnostic_capability", String),
     Column("collection_route", String),
+    Column("mineral_price_source", String),
+    Column("mineral_price_scores_used", String),  # JSON 문자열 (LITHIUM/NICKEL/COBALT)
     Column("reason_codes", String),
     Column("origin_latitude", Float),
     Column("origin_longitude", Float),
@@ -171,6 +176,8 @@ def save_triage(
         "chemistry": s.get("chemistry"),
         "battery_count": s.get("battery_count", 1),
         "soh_proxy_score": result.get("soh_proxy_score"),
+        "capacity_score": result.get("capacity_score"),
+        "mineral_value_score": result.get("mineral_value_score"),
         "reuse_score": result.get("reuse_score"),
         "recycle_score": result.get("recycle_score"),
         "data_confidence": result.get("data_confidence"),
@@ -178,6 +185,12 @@ def save_triage(
         "recommended_path": result.get("recommended_path"),
         "required_diagnostic_capability": result.get("required_diagnostic_capability"),
         "collection_route": result.get("collection_route"),
+        "mineral_price_source": result.get("mineral_price_source"),
+        "mineral_price_scores_used": (
+            json.dumps(result["mineral_price_scores_used"], ensure_ascii=False)
+            if result.get("mineral_price_scores_used") is not None
+            else None
+        ),
         "reason_codes": ",".join(result.get("reason_codes", []) or []),
         "origin_latitude": origin_latitude,
         "origin_longitude": origin_longitude,
