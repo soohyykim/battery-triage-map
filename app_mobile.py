@@ -492,111 +492,110 @@ def render_register():
         triage_result = st.session_state.triage_result
         matching_result = st.session_state.matching_result
 
-        col_info, col_triage = st.columns(2, gap="small")
+        # 예전엔 "배터리 정보"/"Triage 판정" 카드를 st.columns(2)로 나란히
+        # 배치했는데, 한 행에 한 카드씩 세로로 쌓아달라는 요청에 따라 컬럼
+        # 분할 없이 순서대로(01 → 02 → 03) 렌더링하도록 변경했다.
+        card_info = st.container(border=False, key="card_approval_info")
+        with card_info:
+            st.markdown(
+                """
+                <div class="section-title-row">
+                    <div class="section-title-left">
+                        <div class="section-num">01</div>
+                        <p class="section-title-text">배터리 정보</p>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-        with col_info:
-            card_info = st.container(border=False, key="card_approval_info")
-            with card_info:
-                st.markdown(
-                    """
-                    <div class="section-title-row">
-                        <div class="section-title-left">
-                            <div class="section-num">01</div>
-                            <p class="section-title-text">배터리 정보</p>
+            st.markdown(
+                f"""
+                <div class="info-card">
+                    <div class="info-card-row">
+                        <div class="info-item">
+                            <span class="info-label">VIN</span>
+                            <span class="info-value">{intake_record['identification']['vin']}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">연식</span>
+                            <span class="info-value">{intake_record['vehicle_info']['model_year'] or '미입력'}년</span>
                         </div>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-                st.markdown(
-                    f"""
-                    <div class="info-card">
-                        <div class="info-card-row">
-                            <div class="info-item">
-                                <span class="info-label">VIN</span>
-                                <span class="info-value">{intake_record['identification']['vin']}</span>
-                            </div>
-                            <div class="info-item">
-                                <span class="info-label">연식</span>
-                                <span class="info-value">{intake_record['vehicle_info']['model_year'] or '미입력'}년</span>
-                            </div>
+                    <div class="info-card-row">
+                        <div class="info-item">
+                            <span class="info-label">모델명</span>
+                            <span class="info-value">{intake_record['identification']['model_name'] or '미입력'}</span>
                         </div>
-                        <div class="info-card-row">
-                            <div class="info-item">
-                                <span class="info-label">모델명</span>
-                                <span class="info-value">{intake_record['identification']['model_name'] or '미입력'}</span>
-                            </div>
-                            <div class="info-item">
-                                <span class="info-label">주행거리</span>
-                                <span class="info-value">{intake_record['vehicle_info']['mileage_km']:,} km</span>
-                            </div>
-                        </div>
-                        <div class="info-card-row">
-                            <div class="info-item">
-                                <span class="info-label">제조사</span>
-                                <span class="info-value">{intake_record['identification']['battery_manufacturer'] or '미입력'}</span>
-                            </div>
-                            <div class="info-item">
-                                <span class="info-label">용량</span>
-                                <span class="info-value">{intake_record['identification']['capacity_kwh']} kWh</span>
-                            </div>
+                        <div class="info-item">
+                            <span class="info-label">주행거리</span>
+                            <span class="info-value">{intake_record['vehicle_info']['mileage_km']:,} km</span>
                         </div>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-        with col_triage:
-            card_triage = st.container(border=False, key="card_approval_triage")
-            with card_triage:
-                st.markdown(
-                    """
-                    <div class="section-title-row">
-                        <div class="section-title-left">
-                            <div class="section-num">02</div>
-                            <p class="section-title-text">Triage 판정</p>
+                    <div class="info-card-row">
+                        <div class="info-item">
+                            <span class="info-label">제조사</span>
+                            <span class="info-value">{intake_record['identification']['battery_manufacturer'] or '미입력'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">용량</span>
+                            <span class="info-value">{intake_record['identification']['capacity_kwh']} kWh</span>
                         </div>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-                grade_emoji = {"Green": "", "Yellow": "", "Orange": "", "Gray": "", "Red": ""}
-                path_label = {
-                    "reuse_candidate": "재사용 후보",
-                    "reuse_or_recycle_after_diagnosis": "추가진단 후 판단",
-                    "recycle_candidate": "재활용 후보",
-                    "diagnosis_required": "정밀진단 필요",
-                    "designated_waste": "지정폐기물 처리",
-                }.get(triage_result['recommended_path'], triage_result['recommended_path'])
-                st.markdown(
-                    f"""
-                    <div class="info-card">
-                        <div class="info-card-row">
-                            <div class="info-item">
-                                <span class="info-label">SOH Proxy</span>
-                                <span class="info-value">{f"{triage_result['soh_proxy_score']}%" if triage_result.get('soh_proxy_score') is not None else "—"}</span>
-                            </div>
-                            <div class="info-item">
-                                <span class="info-label">등급</span>
-                                <span class="info-value">{grade_emoji.get(triage_result['grade'], '')} {triage_result['grade']}</span>
-                            </div>
+        card_triage = st.container(border=False, key="card_approval_triage")
+        with card_triage:
+            st.markdown(
+                """
+                <div class="section-title-row">
+                    <div class="section-title-left">
+                        <div class="section-num">02</div>
+                        <p class="section-title-text">Triage 판정</p>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            grade_emoji = {"Green": "", "Yellow": "", "Orange": "", "Gray": "", "Red": ""}
+            path_label = {
+                "reuse_candidate": "재사용 후보",
+                "reuse_or_recycle_after_diagnosis": "추가진단 후 판단",
+                "recycle_candidate": "재활용 후보",
+                "diagnosis_required": "정밀진단 필요",
+                "designated_waste": "지정폐기물 처리",
+            }.get(triage_result['recommended_path'], triage_result['recommended_path'])
+            st.markdown(
+                f"""
+                <div class="info-card">
+                    <div class="info-card-row">
+                        <div class="info-item">
+                            <span class="info-label">SOH Proxy</span>
+                            <span class="info-value">{f"{triage_result['soh_proxy_score']}%" if triage_result.get('soh_proxy_score') is not None else "—"}</span>
                         </div>
-                        <div class="info-card-row">
-                            <div class="info-item">
-                                <span class="info-label">처리 방향</span>
-                                <span class="info-value">{path_label}</span>
-                            </div>
-                            <div class="info-item">
-                                <span class="info-label">화학계</span>
-                                <span class="info-value">{intake_record['vehicle_info']['chemistry'] or 'UNKNOWN'}</span>
-                            </div>
+                        <div class="info-item">
+                            <span class="info-label">등급</span>
+                            <span class="info-value">{grade_emoji.get(triage_result['grade'], '')} {triage_result['grade']}</span>
                         </div>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                    <div class="info-card-row">
+                        <div class="info-item">
+                            <span class="info-label">처리 방향</span>
+                            <span class="info-value">{path_label}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">화학계</span>
+                            <span class="info-value">{intake_record['vehicle_info']['chemistry'] or 'UNKNOWN'}</span>
+                        </div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
         card_matching = st.container(border=False, key="card_approval_matching")
         with card_matching:
