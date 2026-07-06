@@ -425,7 +425,7 @@ def render_battery_list():
     )
 
     # ------------------------------------------------------------------
-    # 일괄 작업 토글 — 판정 / 매물 등록 / 처리 완료(지정폐기물) / 상세보기 / 선택 삭제
+    # 일괄 작업 토글 — 판정 / 매물 등록 / 처리 완료(지정폐기물) / 상세보기 / 삭제
     # 필터 영역의 '초기화' 오른쪽 자리(placeholder)에 실제로 렌더링된다.
     # ------------------------------------------------------------------
     with bulk_action_placeholder.container():
@@ -433,7 +433,7 @@ def render_battery_list():
         with bac1:
             bulk_action = st.selectbox(
                 "일괄 작업",
-                ["작업 선택", "판정", "매물 등록", "처리 완료 (지정폐기물)", "상세보기", "선택 삭제"],
+                ["작업 선택", "판정", "매물 등록", "처리 완료 (지정폐기물)", "상세보기", "삭제"],
                 label_visibility="collapsed",
                 key="bl_bulk_action",
             )
@@ -495,7 +495,7 @@ def render_battery_list():
             else:
                 show_detail_dialog(selected_ids[0])
 
-        elif bulk_action == "선택 삭제":
+        elif bulk_action == "삭제":
             if not selected_ids:
                 st.warning("삭제할 배터리를 선택해주세요.")
             else:
