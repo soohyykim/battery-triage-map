@@ -16,7 +16,7 @@ import requests
 import streamlit as st
 
 import ui_common
-from battery_data import API_BASE_URL, DUMMY_USER
+from battery_data import API_BASE_URL, DUMMY_USER, CHANNEL_COORDS
 
 # ---------------------------------------------------------------------------
 # 페이지 설정 + 전역 CSS (앱이라 좁은 폭으로 고정)
@@ -398,12 +398,8 @@ def render_register():
 
                 st.session_state.intake_record = intake_record
 
-                # 발생채널별 임시 좌표 (실제 채널 주소 DB가 없어 시연용으로 고정값 사용)
-                CHANNEL_COORDS = {
-                    "강남폐차센터": (37.4979, 127.0276),
-                    "수원폐차센터": (37.2636, 127.0286),
-                    "인천폐차센터": (37.4563, 126.7052),
-                }
+                # 발생채널별 좌표는 battery_data.py의 공용 CHANNEL_COORDS를 그대로 쓴다
+                # (예전엔 여기 로컬로 중복 정의돼 있었음).
                 origin_lat, origin_lon = CHANNEL_COORDS.get(
                     st.session_state.channel_name, (37.5665, 126.9780)  # 기본값: 서울시청
                 )
@@ -627,36 +623,36 @@ def render_register():
                     unsafe_allow_html=True,
                 )
 
-            for company, col in zip(matched_companies, st.columns(len(matched_companies), gap="small")):
-                with col:
-                    st.markdown(
-                        f"""
-                        <div style="background-color: var(--c-card); border: 1.5px solid var(--c-border); border-radius: 12px; padding: 14px; margin-bottom: 10px; height: 100%;">
-                            <div style="font-size: 12px; font-weight: 700; color: var(--c-primary); margin-bottom: 6px;">{company['rank']}순위</div>
-                            <div style="font-size: 14px; font-weight: 700; color: var(--c-foreground); margin-bottom: 4px;">{company['company_name']}</div>
-                            <div style="font-size: 11px; color: var(--c-muted-foreground); margin-bottom: 10px;">지역: {company['region']} | 거리: {company['distance_km']}km</div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px;">
-                                <div style="background-color: var(--c-secondary); padding: 7px; border-radius: 8px; text-align: center;">
-                                    <div style="font-size: 9px; font-weight: 600; color: var(--c-muted-foreground);">점수</div>
-                                    <div style="font-size: 12px; font-weight: 700; color: var(--c-foreground);">{company['total_score']:.1f}</div>
-                                </div>
-                                <div style="background-color: var(--c-secondary); padding: 7px; border-radius: 8px; text-align: center;">
-                                    <div style="font-size: 9px; font-weight: 600; color: var(--c-muted-foreground);">진단역량</div>
-                                    <div style="font-size: 12px; font-weight: 700; color: var(--c-foreground);">{company['diagnostic_capability'].upper()}</div>
-                                </div>
-                                <div style="background-color: var(--c-secondary); padding: 7px; border-radius: 8px; text-align: center;">
-                                    <div style="font-size: 9px; font-weight: 600; color: var(--c-muted-foreground);">처리유형</div>
-                                    <div style="font-size: 12px; font-weight: 700; color: var(--c-foreground);">{company['process_type']}</div>
-                                </div>
-                                <div style="background-color: var(--c-secondary); padding: 7px; border-radius: 8px; text-align: center;">
-                                    <div style="font-size: 9px; font-weight: 600; color: var(--c-muted-foreground);">상태</div>
-                                    <div style="font-size: 12px; font-weight: 700; color: var(--c-foreground);">운영중</div>
-                                </div>
+            # 처리유형 코드값을 한글 라벨로 변환 (긴 영문 문자열이 좁은 박스에서
+            # 줄바꿈되며 다른 카드를 침범하는 문제 방지 목적도 겸함)
+            _PROCESS_LABEL = {"reuse": "재사용", "recycle": "재활용", "designated_waste": "지정폐기물 처리"}
+
+            # 좌우로 카드를 나열하던 st.columns() 그리드는 업체 수가 늘거나
+            # process_type처럼 긴 문자열(예: designated_waste)이 들어오면 좁은
+            # 칸 안에서 줄바꿈되며 옆 카드를 침범하는 문제가 있었다. 이를
+            # 세로로 한 줄씩 쌓는 리스트 형태로 바꿔 폭에 상관없이 안전하게
+            # 표시되도록 한다.
+            for company in matched_companies:
+                process_label = _PROCESS_LABEL.get(company['process_type'], company['process_type'])
+                st.markdown(
+                    f"""
+                    <div style="background-color: var(--c-card); border: 1.5px solid var(--c-border); border-radius: 12px; padding: 14px 16px; margin-bottom: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                            <div style="display: flex; align-items: center; gap: 8px; min-width: 0;">
+                                <span style="flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--c-primary-foreground); background-color: var(--c-primary); border-radius: 999px; padding: 2px 9px;">{company['rank']}위</span>
+                                <span style="font-size: 14px; font-weight: 700; color: var(--c-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{company['company_name']}</span>
+                            </div>
+                            <div style="flex-shrink: 0; font-size: 12px; color: var(--c-muted-foreground); text-align: right;">
+                                {company['distance_km']}km · <b style="color: var(--c-foreground);">{company['total_score']:.1f}점</b>
                             </div>
                         </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
+                        <div style="margin-top: 6px; font-size: 11px; color: var(--c-muted-foreground);">
+                            지역: {company['region']} &nbsp;|&nbsp; 진단역량: {company['diagnostic_capability'].upper()} &nbsp;|&nbsp; 처리유형: {process_label} &nbsp;|&nbsp; 상태: 운영중
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
             # 지도 표시 (매칭된 업체가 있고 좌표가 있을 때)
             if matched_companies and any(c.get('latitude') and c.get('longitude') for c in matched_companies):
@@ -664,11 +660,6 @@ def render_register():
                 from streamlit_folium import st_folium
 
                 channel_name = st.session_state.get("channel_name", "강남폐차센터")
-                CHANNEL_COORDS = {
-                    "강남폐차센터": (37.4979, 127.0276),
-                    "수원폐차센터": (37.2636, 127.0286),
-                    "인천폐차센터": (37.4563, 126.7052),
-                }
                 origin_lat, origin_lon = CHANNEL_COORDS.get(channel_name, (37.5665, 126.9780))
 
                 all_lats = [origin_lat] + [c['latitude'] for c in matched_companies if c.get('latitude')]
