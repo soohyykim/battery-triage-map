@@ -47,7 +47,7 @@ def decode_barcode(image):
 
 
 def render_register():
-    ui_common.inject_global_css(container_max_width="480px")
+    ui_common.inject_global_css(container_max_width="480px", phone_frame=True)
 
     # ---------------------------------------------------------------------------
     # 세션 상태 초기화

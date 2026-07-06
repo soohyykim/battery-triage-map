@@ -138,7 +138,7 @@ SEED_CASES = [
     },
     # Red x1 (침수 플래그 켜서 지정폐기물 판정 유도)
     {
-        "vin": "SEED010RED000001",
+        "vin": "SEED010RED0000001",
         "manufacturer": "기아 주식회사",
         "model_name": "니로 EV",
         "vehicle_year": 2020,

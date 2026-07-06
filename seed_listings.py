@@ -49,6 +49,17 @@ CANDIDATE_PATHS = [
 N_SEED = 20
 
 
+def _synthetic_vin(battery_id, index: int) -> str:
+    """battery_cases_demo.csv의 battery_id(예: BAT_000025, 10자)는 내부 케이스
+    식별자일 뿐 실제 VIN이 아니다. 실제 VIN은 항상 17자리인데 이 값을 그대로
+    써버리면 화면에 10자리 VIN이 노출돼 눈에 띄게 어색해 보인다. battery_id의
+    숫자부분 + 순번을 조합해 자릿수(17자)만이라도 실제 VIN 형태에 맞춘
+    합성 VIN을 만든다 (체크섬 등 ISO 3779 규격까지 충족하진 않는 데모용 값).
+    """
+    digits = "".join(ch for ch in str(battery_id) if ch.isdigit()).zfill(6)[-6:]
+    return f"KMHDM41A{digits}{index:03d}"  # 8 + 6 + 3 = 17자
+
+
 def resolve_csv_path():
     """CLI 인자로 경로를 직접 줬으면 그걸 쓰고, 아니면 후보 경로들을 순서대로 탐색."""
     if len(sys.argv) > 1:
@@ -99,7 +110,7 @@ def seed():
         origin_lat, origin_lon = CHANNEL_COORDS[channel_name]
 
         payload = {
-            "vin": str(getattr(row, "battery_id", f"SEED-{i:03d}")),
+            "vin": _synthetic_vin(getattr(row, "battery_id", f"SEED-{i:03d}"), i),
             "vehicle_year": int(row.vehicle_year) if pd.notna(row.vehicle_year) else None,
             "mileage_km": float(row.mileage_km) if pd.notna(row.mileage_km) else None,
             "capacity_kwh": float(row.capacity_kwh) if pd.notna(row.capacity_kwh) else None,

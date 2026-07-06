@@ -102,6 +102,8 @@ _CSS_TEMPLATE = """
             padding-right: 0px !important;
         }
 
+        __PHONE_FRAME_CSS__
+
         /* ---------- 헤더 (fixed 고정) ----------
            이전에 JS(getBoundingClientRect)로 동적 정렬을 시도했으나,
            Streamlit은 st.markdown(unsafe_allow_html=True) 안의 <script>를
@@ -752,9 +754,73 @@ _CSS_TEMPLATE = """
 """
 
 
-def inject_global_css(container_max_width: str = "1200px"):
-    """전역 CSS 주입. 앱은 좁게(480px), 웹은 넓게(1200px) 쓰면 된다."""
+_PHONE_FRAME_CSS = """
+        /* 실제 모바일 기기처럼 보이도록 block-container를 폰 베젤로 감싼다.
+           (app_mobile.py 배터리 등록 페이지 전용 — phone_frame=True일 때만 적용)
+           틀(베젤+노치)은 고정하고 그 안의 콘텐츠만 스크롤되도록, block-container
+           자체에 높이를 고정하고 overflow-y:auto를 줘서 내부 스크롤 컨테이너로
+           만든다. border/box-shadow는 요소 자체의 테두리라 내부 스크롤과 무관하게
+           항상 고정 위치에 그려지므로 베젤은 저절로 고정된다. 노치(::before)만
+           position:sticky로 줘서 스크롤 중에도 상단에 붙어있게 한다. */
+        html, body {
+            overflow: hidden !important;
+        }
+        .stApp {
+            background-color: #dfe3ea !important;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .block-container {
+            position: relative;
+            margin: 32px auto !important;
+            width: auto !important;
+            max-width: 480px !important;
+            height: min(calc(100vh - 64px), calc(100dvh - 64px), 932px);
+            border: 12px solid #1a1d24;
+            border-radius: 46px;
+            box-shadow: 0 24px 48px rgba(0,0,0,0.28), 0 0 0 2px #3a3f4a;
+            background-color: var(--c-background);
+            padding-top: 8px !important;
+            padding-left: 18px !important;
+            padding-right: 18px !important;
+            padding-bottom: 24px !important;
+            overflow-y: auto;
+            overflow-x: hidden;
+            scrollbar-width: none; /* Firefox: 스크롤은 유지하되 막대는 안 보이게 */
+            -ms-overflow-style: none; /* 구형 Edge/IE */
+        }
+        /* Chrome/Safari/Edge(Chromium) — 스크롤바를 0폭으로 숨겨서
+           오른쪽 여백이 왼쪽보다 커 보이는 문제(스크롤바 트랙 폭만큼 좁아짐)를 없앤다. */
+        .block-container::-webkit-scrollbar {
+            width: 0px;
+            height: 0px;
+            display: none;
+        }
+        .block-container::before {
+            content: "";
+            display: block;
+            position: sticky;
+            top: 4px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 20px;
+            margin-bottom: 14px;
+            background-color: #1a1d24;
+            border-radius: 12px;
+            z-index: 1000;
+        }
+"""
+
+
+def inject_global_css(container_max_width: str = "1200px", phone_frame: bool = False):
+    """전역 CSS 주입. 앱은 좁게(480px), 웹은 넓게(1200px) 쓰면 된다.
+
+    phone_frame=True로 주면 block-container를 실제 스마트폰처럼 다크 베젤 +
+    상단 노치가 있는 틀로 감싼다 (app_mobile.py 배터리 등록 화면 전용).
+    """
     css = _CSS_TEMPLATE.replace("__CONTAINER_MAX_WIDTH__", container_max_width)
+    css = css.replace("__PHONE_FRAME_CSS__", _PHONE_FRAME_CSS if phone_frame else "")
     st.markdown(css, unsafe_allow_html=True)
 
 
