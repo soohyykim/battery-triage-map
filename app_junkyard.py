@@ -726,7 +726,13 @@ def render_dashboard():
                 "날짜": [d[5:] for d in counts_by_date.keys()],
                 "등록 건수": list(counts_by_date.values()),
             }).set_index("날짜")
-            st.bar_chart(trend_df, use_container_width=True, height=190, color="#142f4b")
+            # 오른쪽에 얇은 여백 컬럼을 하나 더 둬서, 맨 오른쪽(최신 날짜) 막대가
+            # 카드 테두리에 바로 붙지 않게 한다. use_container_width=True라
+            # 막대그래프가 자기 컨테이너 폭을 꽉 채우는데, 컨테이너 자체를
+            # 카드보다 살짝 좁게 나눠서 오른쪽 여백을 만드는 방식이다.
+            chart_col, _chart_spacer = st.columns([0.94, 0.06])
+            with chart_col:
+                st.bar_chart(trend_df, use_container_width=True, height=190, color="#142f4b")
 
     # 4) 처리업체 현황 (지도 + 리스트)
     with st.container(border=False, key="card_company_status"):
