@@ -1,0 +1,26 @@
+streamlit==1.40.0
+fastapi==0.111.0
+uvicorn==0.30.0
+chromadb>=1.5.9
+langchain==0.2.0
+langchain-anthropic==0.1.15
+folium==0.16.0
+streamlit-folium==0.20.0
+fpdf2==2.7.9
+pandas>=2.2.3
+requests==2.31.0
+python-dotenv==1.0.1
+# QR code scanning (headless: for server environments, no GUI deps)
+opencv-python-headless>=4.10.0
+pillow>=10.4.0
+numpy>=1.26.4
+# Postgres integration (Render Blueprint - for api/main.py backend)
+sqlalchemy>=2.0.0
+psycopg2-binary>=2.9.9
+pymupdf==1.24.11
+openai==1.51.0
+google-generativeai>=0.8.0
+# Dashboard grade-distribution pie chart (app_junkyard.py)
+matplotlib>=3.8.0
+# Bulk excel upload .xlsx parsing (pandas.read_excel engine, app_junkyard.py)
+openpyxl>=3.1.2
