@@ -392,7 +392,7 @@ def render_battery_list():
             "접수번호": _receipt_no(b),
             "VIN": b.get("vin") or "—",
             "모델명": b.get("model_name") or "—",
-            "제조사": b.get("battery_manufacturer") or "—",
+            "배터리 제조사": b.get("battery_manufacturer") or "—",
             "용량(kWh)": b.get("capacity_kwh") if b.get("capacity_kwh") is not None else "—",
             "등급": grade,
             "상태": status,
@@ -408,10 +408,10 @@ def render_battery_list():
         column_config={
             "선택": st.column_config.CheckboxColumn("선택", default=False, width="small"),
         },
-        disabled=["접수번호", "VIN", "모델명", "제조사", "용량(kWh)", "등급", "상태", "추천업체", "입고일"],
+        disabled=["접수번호", "VIN", "모델명", "배터리 제조사", "용량(kWh)", "등급", "상태", "추천업체", "입고일"],
         hide_index=True,
         use_container_width=True,
-        column_order=["선택", "접수번호", "VIN", "모델명", "제조사", "용량(kWh)", "등급", "상태", "추천업체", "입고일"],
+        column_order=["선택", "접수번호", "VIN", "모델명", "배터리 제조사", "용량(kWh)", "등급", "상태", "추천업체", "입고일"],
         key=f"battery_editor_{st.session_state.bl_select_all_version}",
     )
 
@@ -725,12 +725,27 @@ def render_dashboard():
             trend_df = pd.DataFrame({
                 "날짜": [d[5:] for d in counts_by_date.keys()],
                 "등록 건수": list(counts_by_date.values()),
-            }).set_index("날짜")
+            })
             # 양쪽에 얇은 여백 컬럼을 둬서, 막대그래프가 카드 테두리에 바로
             # 붙지 않고 좌우 여백이 동일하게 보이도록 한다.
             _chart_spacer_l, chart_col, _chart_spacer_r = st.columns([0.03, 0.94, 0.03])
             with chart_col:
-                st.bar_chart(trend_df, use_container_width=True, height=190, color="#142f4b")
+                # st.bar_chart는 내부적으로 altair를 거치는데, altair 5.5.0이
+                # 아직 최신 Python(3.14+)의 TypedDict(closed=True)와 호환되지
+                # 않아 TypeError로 죽는 환경이 있다. altair를 아예 거치지
+                # 않도록 matplotlib으로 직접 그린다(도넛차트와 동일한 방식).
+                import matplotlib.pyplot as plt
+                fig2, ax2 = plt.subplots(figsize=(6.4, 2.0))
+                ax2.bar(trend_df["날짜"], trend_df["등록 건수"], color="#142f4b", width=0.6)
+                ax2.spines["top"].set_visible(False)
+                ax2.spines["right"].set_visible(False)
+                ax2.spines["left"].set_visible(False)
+                ax2.tick_params(axis="both", labelsize=8, length=0)
+                ax2.set_facecolor("none")
+                fig2.patch.set_alpha(0.0)
+                fig2.tight_layout(pad=0.5)
+                st.pyplot(fig2, use_container_width=True)
+                plt.close(fig2)
 
     # 4) 처리업체 현황 (지도 + 리스트)
     with st.container(border=False, key="card_company_status"):
@@ -934,8 +949,12 @@ def render_settings():
     with st.expander("🛠 시연/관리자 도구"):
         st.caption("아래 작업은 로컬 공유 파일(.battery_status_overrides.json 등)만 대상으로 하며, 되돌릴 수 없습니다.")
         if st.button("⚠ 로컬 상태 초기화 (시연 데이터 리셋)", key="settings_reset_local_state"):
+            # 예전엔 st.success() 직후 바로 st.rerun()을 호출해서, 메시지가
+            # 화면에 그려지기도 전에 리렌더링되며 사라져버렸다(성공이든 실패든
+            # 확인할 방법이 없었음). rerun을 없애서 이번 실행 결과가 그대로
+            # 화면에 남아있게 한다 — 다음 상호작용(페이지 이동 등) 때 자연스럽게
+            # 새로고침되므로 별도 rerun이 없어도 다음 조회부터는 반영된다.
             reset_local_state()
-            st.success("로컬 상태를 초기화했습니다. (매물 등록/매입 확정/처리 완료 표시, 엑셀 대량 등록 대기열, 발생 폐차장 배정이 모두 초기화됨)")
-            st.rerun()
+            st.success("로컬 상태를 초기화했습니다. (매물 등록/매입 확정/처리 완료 표시, 엑셀 대량 등록 대기열, 발생 폐차장 배정이 모두 초기화됨) 배터리 관리 페이지로 이동해서 확인해주세요.")
 
 
