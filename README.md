@@ -94,12 +94,6 @@ uvicorn api.main:app --reload
 
 ---
 
-## 트러블슈팅 하이라이트
-
-개발 과정에서 겪었던 문제와 해결 과정은 [`docs/TROUBLESHOOTING.md`](./docs/TROUBLESHOOTING.md)에 상세히 정리했습니다. 그중 가장 오래 걸렸던 건 **Streamlit Cloud 배포 시 간헐적으로 발생한 Segmentation Fault**로, requirements.txt 분리 → 패키지 버전 고정 → config 검증 → Python 버전 검증 → 환경 격리 테스트까지 여러 가설을 순서대로 배제해가며 원인(altair-Python 3.14 비호환성)을 좁혀나갔습니다. 함께 조사했던 별개의 "Page not found" 경고는 코드 버그가 아니라 Streamlit 프레임워크 자체의 알려진 동작으로 확인되었습니다.
-
----
-
 ## 프로젝트 구조
 
 ```
